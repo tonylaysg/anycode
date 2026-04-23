@@ -19,6 +19,7 @@ fn build_spawn(raw_args: &[String]) -> anyclaude::args::SpawnParams {
         &ClaudeSettingsManager::new(),
         None,
             None,
+false,
 )
 }
 
@@ -112,10 +113,11 @@ fn env_set_chaining() {
 
     let env = EnvSet::new()
         .with_proxy_url("http://127.0.0.1:47190")
+        .with_auth_bypass(false)
         .with_extra(vec![("CUSTOM_VAR".into(), "value".into())])
         .build();
 
-    // with_proxy_url sets ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY placeholder + CUSTOM_VAR
+    // with_auth_bypass(false) sets ANTHROPIC_API_KEY placeholder; with_proxy_url sets ANTHROPIC_BASE_URL; + CUSTOM_VAR
     assert_eq!(env.len(), 3);
     assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
     assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_API_KEY"));
@@ -184,6 +186,7 @@ fn resume_appends_extra_args() {
         vec![],
         extra,
             None,
+false,
 );
     assert!(p.args.contains(&"--verbose".to_string()));
     assert!(p.args.contains(&"--resume".to_string()));
@@ -212,6 +215,7 @@ fn restart_merges_extra_env() {
         extra_env,
         vec![],
             None,
+false,
 );
     assert!(p.env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
     assert!(p.env.iter().any(|(k, v)| k == "FOO" && v == "1"));

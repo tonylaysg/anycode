@@ -1,6 +1,6 @@
 use crate::args::{build_restart_params, build_spawn_params, SpawnParams};
 use crate::clipboard::ClipboardHandler;
-use crate::config::{save_claude_settings, ClaudeSettingsManager, Config, ConfigStore};
+use crate::config::{save_claude_settings, AuthType, ClaudeSettingsManager, Config, ConfigStore};
 use crate::error::{ErrorCategory, ErrorSeverity};
 use crate::ipc::IpcLayer;
 use crate::metrics::{init_global_logger, DebugLogger};
@@ -71,6 +71,13 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     let scrollback_lines = config_store.get().terminal.scrollback_lines;
     let mut settings_manager = ClaudeSettingsManager::new();
     settings_manager.load_from_toml(&config_store.get().claude_settings);
+    let is_passthrough = {
+        let cfg = config_store.get();
+        cfg.backends.iter()
+            .find(|b| b.name == cfg.defaults.active)
+            .map(|b| b.auth_type() == AuthType::Passthrough)
+            .unwrap_or(true)
+    };
     let mut spawn = build_spawn_params(
         &base_raw_args,
         &base_proxy_url,
@@ -78,6 +85,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         &settings_manager,
         None, // shim not needed here — we only use session_id from the result
         None, // proxy_port unknown yet — will be updated after try_bind
+        is_passthrough,
     );
     let current_session_id = spawn.session_id.clone();
 
@@ -516,6 +524,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
                             app.settings_manager(),
                             _teammate_shim.as_ref(),
                             Some(proxy_port),
+                            is_passthrough,
                         );
                         respawn_pty(
                             &mut app,
@@ -593,6 +602,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
                     env_vars,
                     cli_args,
                     Some(proxy_port),
+                    is_passthrough,
                 );
                 respawn_pty(
                     &mut app,

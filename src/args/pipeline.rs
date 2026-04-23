@@ -46,6 +46,7 @@ pub fn build_spawn_params(
     settings: &ClaudeSettingsManager,
     shim: Option<&TeammateShim>,
     proxy_port: Option<u16>,
+    is_passthrough: bool,
 ) -> SpawnParams {
     let registry = flag_registry();
 
@@ -64,6 +65,7 @@ pub fn build_spawn_params(
     // Stage 3: Build environment
     let env = EnvSet::new()
         .with_proxy_url(proxy_url)
+        .with_auth_bypass(is_passthrough)
         .with_session_token(session_token)
         .with_settings(settings)
         .with_shim(shim)
@@ -106,6 +108,7 @@ pub fn build_restart_params(
     extra_env: Vec<(String, String)>,
     extra_args: Vec<String>,
     proxy_port: Option<u16>,
+    is_passthrough: bool,
 ) -> SpawnParams {
     let registry = flag_registry();
 
@@ -124,6 +127,7 @@ pub fn build_restart_params(
     // Stage 3: Build environment (with extra)
     let env = EnvSet::new()
         .with_proxy_url(proxy_url)
+        .with_auth_bypass(is_passthrough)
         .with_session_token(session_token)
         .with_settings(settings)
         .with_shim(shim)
