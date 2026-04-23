@@ -16,16 +16,29 @@ impl EnvSet {
     }
 
     /// Always-present: proxy URL for Claude API.
-    /// Also injects a dummy ANTHROPIC_API_KEY so Claude Code skips its own
-    /// auth check — actual authentication is handled entirely by the proxy.
+    ///
+    /// If no real Anthropic credentials exist in the current environment
+    /// (`ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` are both absent/empty),
+    /// injects a placeholder `ANTHROPIC_API_KEY` so Claude Code skips its own
+    /// login check — actual authentication is handled entirely by the proxy.
+    ///
+    /// When real credentials ARE present we leave them untouched, avoiding the
+    /// "MAuth conflict" error Claude Code emits when both token types are set.
     pub fn with_proxy_url(mut self, url: &str) -> Self {
-        self.vars
-            .push(("ANTHROPIC_BASE_URL".into(), url.into()));
-        // Claude Code checks ANTHROPIC_API_KEY or ~/.claude/.credentials.json
-        // before making any requests. Since all requests go through our proxy
-        // which handles real auth, we inject a placeholder to bypass this check.
-        self.vars
-            .push(("ANTHROPIC_API_KEY".into(), "anyclaude-proxy".into()));
+        self.vars.push(("ANTHROPIC_BASE_URL".into(), url.into()));
+
+        let has_auth_token = std::env::var("ANTHROPIC_AUTH_TOKEN")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        let has_api_key = std::env::var("ANTHROPIC_API_KEY")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+
+        if !has_auth_token && !has_api_key {
+            // No real credentials → inject placeholder so Claude Code won't
+            // show the login screen.  The proxy replaces auth on every request.
+            self.vars.push(("ANTHROPIC_API_KEY".into(), "anyclaude-proxy".into()));
+        }
         self
     }
 
