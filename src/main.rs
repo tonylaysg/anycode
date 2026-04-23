@@ -81,6 +81,13 @@ enum Commands {
 
     /// Set or reset WebUI login credentials
     Passwd,
+
+    /// Reset Claude Code auth state (clears cached env from previous sessions)
+    Reset {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 // ── PID 文件工具 ──────────────────────────────────────────────────────────────
@@ -240,6 +247,65 @@ fn cmd_stop() -> io::Result<()> {
             println!("anyclaude 未运行");
         }
     }
+    Ok(())
+}
+
+fn cmd_reset(yes: bool) -> io::Result<()> {
+    if !yes {
+        println!("此命令将清理 AnyClaude 注入到 Claude Code 的残留状态：");
+        println!("  - 停止运行中的 anyclaude 实例");
+        println!("  - 清理 ~/.claude/session-env/ 缓存的环境变量");
+        println!("  - 清理 ~/.claude/sessions/ 中的会话记录");
+        println!();
+        print!("确认执行？[y/N]: ");
+        io::stdout().flush()?;
+        let mut buf = [0u8; 4];
+        let n = io::stdin().read(&mut buf).unwrap_or(0);
+        let input = std::str::from_utf8(&buf[..n]).unwrap_or("").trim().to_lowercase();
+        if input != "y" {
+            println!("已取消");
+            return Ok(());
+        }
+    }
+
+    // 停止运行中的 anyclaude 实例
+    if let Some(pid) = read_pid() {
+        if is_anyclaude_running(pid) {
+            let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+            if ret == 0 {
+                println!("✓ 已停止 anyclaude (PID: {})", pid);
+                let _ = std::fs::remove_file(pid_file_path());
+            }
+        }
+    }
+
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    let claude_dir = home.join(".claude");
+
+    // 清理 session-env（anyclaude 注入的 ANTHROPIC_BASE_URL 等可能被 Claude Code 缓存于此）
+    let session_env_dir = claude_dir.join("session-env");
+    if session_env_dir.exists() {
+        match std::fs::remove_dir_all(&session_env_dir) {
+            Ok(_) => println!("✓ 已清理 ~/.claude/session-env/"),
+            Err(e) => eprintln!("  清理 session-env 失败: {}", e),
+        }
+    } else {
+        println!("  ~/.claude/session-env/ 不存在，跳过");
+    }
+
+    // 清理 sessions（旧会话可能携带 anyclaude-proxy 凭证缓存）
+    let sessions_dir = claude_dir.join("sessions");
+    if sessions_dir.exists() {
+        match std::fs::remove_dir_all(&sessions_dir) {
+            Ok(_) => println!("✓ 已清理 ~/.claude/sessions/"),
+            Err(e) => eprintln!("  清理 sessions 失败: {}", e),
+        }
+    } else {
+        println!("  ~/.claude/sessions/ 不存在，跳过");
+    }
+
+    println!();
+    println!("重置完成。请重新运行 anyclaude，Claude Code 将重新进行登录认证。");
     Ok(())
 }
 
@@ -559,6 +625,7 @@ fn main() -> io::Result<()> {
             }
             Commands::Bind { mode } => cmd_bind(&mode),
             Commands::Passwd => cmd_passwd(),
+            Commands::Reset { yes } => cmd_reset(yes),
         };
     }
 

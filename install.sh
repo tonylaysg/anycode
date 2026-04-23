@@ -91,10 +91,24 @@ install_from_source() {
 
 # ── 主安装流程 ────────────────────────────────────────────────────────────────
 main() {
+    # 检测是否为更新模式（二进制和配置文件均已存在）
+    local is_update=false
+    if [[ -f "${INSTALL_DIR}/${BINARY}" && -f "${CONFIG_FILE}" ]]; then
+        is_update=true
+    fi
+
     printf '\n'
-    printf '%s AnyClaude 安装程序 %s\n' "$CYAN" "$NC"
-    printf '%s ================= %s\n'  "$CYAN" "$NC"
-    printf '\n'
+    if $is_update; then
+        printf '%s AnyClaude 更新程序 %s\n' "$CYAN" "$NC"
+        printf '%s ================= %s\n'  "$CYAN" "$NC"
+        printf '\n'
+        info "检测到已有安装，将只更新二进制文件，保留现有配置"
+        info "如需重新配置 WebUI，请手动编辑: ${CONFIG_FILE}"
+    else
+        printf '%s AnyClaude 安装程序 %s\n' "$CYAN" "$NC"
+        printf '%s ================= %s\n'  "$CYAN" "$NC"
+        printf '\n'
+    fi
 
     detect_platform
     info "平台: ${OS}/${ARCH}"
@@ -121,6 +135,23 @@ main() {
     else
         warn "无法获取最新版本信息，切换到源码编译"
         install_from_source; installed_via="source"
+    fi
+
+    # ── 更新模式：跳过配置向导，直接显示完成摘要 ──────────────────────────────
+    if $is_update; then
+        local version
+        version=$("${INSTALL_DIR}/${BINARY}" --version 2>/dev/null || echo "unknown")
+        printf '\n'
+        printf '%s=== 更新完成 ===%s\n' "$GREEN" "$NC"
+        printf '\n'
+        printf '  二进制:    %s%s/%s%s\n' "$CYAN" "$INSTALL_DIR" "$BINARY" "$NC"
+        printf '  版本:      %s%s%s\n'   "$CYAN" "$version"      "$NC"
+        printf '  安装方式:  %s%s%s\n'   "$CYAN" "$installed_via" "$NC"
+        printf '  配置文件:  %s%s%s（已保留）%s\n' "$CYAN" "$CONFIG_FILE" "$GREEN" "$NC"
+        printf '\n'
+        printf '  如遇认证问题，可执行: %sanyclaude reset%s\n' "$CYAN" "$NC"
+        printf '\n'
+        return 0
     fi
 
     # ── WebUI 配置向导 ─────────────────────────────────────────────────────────
@@ -252,6 +283,7 @@ EOF
     printf '    %sanyclaude stop%s              # 停止运行中的实例\n'         "$CYAN" "$NC"
     printf '    %sanyclaude uninstall%s         # 卸载 (保留配置)\n'         "$CYAN" "$NC"
     printf '    %sanyclaude uninstall --purge%s # 完全卸载 (含配置)\n'       "$CYAN" "$NC"
+    printf '    %sanyclaude reset%s            # 清理旧版 bug 残留的认证状态\n' "$CYAN" "$NC"
     printf '\n'
     printf '  %sWeb 配置界面:%s\n' "$YELLOW" "$NC"
     printf '    启动后访问: %s%s%s\n' "$CYAN" "$webui_url" "$NC"
