@@ -181,6 +181,9 @@ username  = \"${webui_user}\"
 password  = \"${webui_pass}\""
     fi
 
+    # 先创建空文件并限制权限（600），再写入内容，避免密码被其他用户读取
+    touch "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
     cat > "$CONFIG_FILE" <<EOF
 [defaults]
 active = "anthropic"
@@ -197,7 +200,7 @@ display_name = "Anthropic (官方)"
 base_url     = "https://api.anthropic.com"
 auth_type    = "passthrough"
 EOF
-    success "已写入配置: ${CONFIG_FILE}"
+    success "已写入配置: ${CONFIG_FILE} (权限: 600)"
 
     # ── 计算 WebUI 访问 URL ────────────────────────────────────────────────────
     if [[ "$webui_bind" == "0.0.0.0:47191" ]]; then

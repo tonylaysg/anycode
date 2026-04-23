@@ -74,9 +74,22 @@ fn read_pid() -> Option<u32> {
         .and_then(|s| s.trim().parse().ok())
 }
 
-fn is_process_running(pid: u32) -> bool {
-    // send signal 0: checks process existence without actually signalling
-    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+/// Returns true only when PID exists AND its /proc/PID/comm is "anyclaude".
+/// This prevents false-positives when the OS reuses a stale PID.
+fn is_anyclaude_running(pid: u32) -> bool {
+    // Primary: check /proc/<pid>/comm (Linux-only, fast)
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+            return comm.trim() == "anyclaude";
+        }
+        return false;
+    }
+    // Fallback for non-Linux: signal-0 only (no process-identity check)
+    #[cfg(not(target_os = "linux"))]
+    unsafe {
+        libc::kill(pid as libc::pid_t, 0) == 0
+    }
 }
 
 /// RAII guard that removes the PID file on drop.
@@ -91,7 +104,7 @@ impl Drop for PidGuard {
 
 fn cmd_status() -> io::Result<()> {
     match read_pid() {
-        Some(pid) if is_process_running(pid) => {
+        Some(pid) if is_anyclaude_running(pid) => {
             println!("● anyclaude 正在运行  (PID: {})", pid);
             if let Ok(cfg) = Config::load() {
                 println!("  代理地址:  http://{}", cfg.proxy.bind_addr);
@@ -147,7 +160,7 @@ fn cmd_logs(lines: usize, follow: bool) -> io::Result<()> {
 
 fn cmd_stop() -> io::Result<()> {
     match read_pid() {
-        Some(pid) if is_process_running(pid) => {
+        Some(pid) if is_anyclaude_running(pid) => {
             let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
             if ret == 0 {
                 println!("已向 anyclaude (PID: {}) 发送停止信号", pid);

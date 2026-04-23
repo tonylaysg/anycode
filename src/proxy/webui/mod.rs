@@ -34,7 +34,18 @@ struct AuthState {
     expected: Option<Arc<String>>,
 }
 
-/// Middleware: enforce Basic Auth when a password is configured.
+/// Constant-time byte comparison — prevents timing attacks on auth token.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    // XOR all bytes; non-zero result means mismatch.
+    // Optimizer cannot short-circuit because result is accumulated.
+    let diff = a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y));
+    diff == 0
+}
+
+/// Middleware: enforce Basic Auth when credentials are configured.
 async fn basic_auth_middleware(
     State(auth): State<AuthState>,
     req: Request<Body>,
@@ -47,7 +58,7 @@ async fn basic_auth_middleware(
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
-        if provided != expected.as_str() {
+        if !constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
             return Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
                 .header("WWW-Authenticate", r#"Basic realm="AnyClaude WebUI""#)

@@ -241,11 +241,7 @@ pub fn save_claude_settings(
     path: &Path,
     settings: &HashMap<String, bool>,
 ) -> Result<(), ConfigError> {
-    // Load existing config (or defaults if file doesn't exist)
-    let mut config = Config::load_from(path).unwrap_or_default();
-    config.claude_settings = settings.clone();
-
-    // Ensure parent directory exists
+    // Ensure parent directory exists before opening
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| ConfigError::ReadError {
             path: path.to_path_buf(),
@@ -253,34 +249,60 @@ pub fn save_claude_settings(
         })?;
     }
 
-    // Serialize the full config
-    let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::ValidationError {
-        message: format!("Failed to serialize config: {}", e),
-    })?;
-
-    // Write with exclusive lock
+    // Open without truncate so we can acquire the lock BEFORE reading.
+    // Truncate + write happens after we hold the exclusive lock, preventing
+    // a race where two callers both read stale config and last-writer wins.
     let file = std::fs::OpenOptions::new()
+        .read(true)
         .write(true)
         .create(true)
-        .truncate(true)
         .open(path)
         .map_err(|e| ConfigError::ReadError {
             path: path.to_path_buf(),
             source: e,
         })?;
 
+    // Acquire exclusive lock FIRST, then read — prevents read-modify-write races
     fs2::FileExt::lock_exclusive(&file).map_err(|e| ConfigError::ReadError {
         path: path.to_path_buf(),
         source: e,
     })?;
 
-    use std::io::Write;
-    (&file)
-        .write_all(content.as_bytes())
-        .map_err(|e| ConfigError::ReadError {
-            path: path.to_path_buf(),
-            source: e,
-        })?;
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    // Read current content while holding the lock
+    let mut raw = String::new();
+    (&file).read_to_string(&mut raw).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    let mut config: Config = if raw.trim().is_empty() {
+        Config::default()
+    } else {
+        toml::from_str(&raw).map_err(|e| ConfigError::ValidationError {
+            message: format!("Failed to parse config: {}", e),
+        })?
+    };
+    config.claude_settings = settings.clone();
+
+    let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::ValidationError {
+        message: format!("Failed to serialize config: {}", e),
+    })?;
+
+    // Truncate and overwrite while holding the lock
+    (&file).seek(SeekFrom::Start(0)).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    file.set_len(0).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    (&file).write_all(content.as_bytes()).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
 
     Ok(())
 }
