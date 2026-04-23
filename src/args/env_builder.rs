@@ -16,9 +16,16 @@ impl EnvSet {
     }
 
     /// Always-present: proxy URL for Claude API.
+    /// Also injects a dummy ANTHROPIC_API_KEY so Claude Code skips its own
+    /// auth check — actual authentication is handled entirely by the proxy.
     pub fn with_proxy_url(mut self, url: &str) -> Self {
         self.vars
             .push(("ANTHROPIC_BASE_URL".into(), url.into()));
+        // Claude Code checks ANTHROPIC_API_KEY or ~/.claude/.credentials.json
+        // before making any requests. Since all requests go through our proxy
+        // which handles real auth, we inject a placeholder to bypass this check.
+        self.vars
+            .push(("ANTHROPIC_API_KEY".into(), "anyclaude-proxy".into()));
         self
     }
 

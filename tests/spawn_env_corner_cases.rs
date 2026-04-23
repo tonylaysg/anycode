@@ -351,9 +351,10 @@ fn env_set_with_proxy_url_directly() {
         .with_proxy_url("http://127.0.0.1:4000")
         .build();
 
-    assert_eq!(env.len(), 1);
-    assert_eq!(env[0].0, "ANTHROPIC_BASE_URL");
-    assert_eq!(env[0].1, "http://127.0.0.1:4000");
+    // with_proxy_url sets ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY (bypass key)
+    assert_eq!(env.len(), 2);
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:4000"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_API_KEY" && v == "anyclaude-proxy"));
 }
 
 /// Test that EnvSet preserves proxy URL when adding shim.

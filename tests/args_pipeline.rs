@@ -111,7 +111,11 @@ fn env_set_chaining() {
         .with_extra(vec![("CUSTOM_VAR".into(), "value".into())])
         .build();
 
-    assert_eq!(env.len(), 2);
+    // with_proxy_url sets ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY (bypass key)
+    assert_eq!(env.len(), 3);
+    assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
+    assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_API_KEY"));
+    assert!(env.iter().any(|(k, _)| k == "CUSTOM_VAR"));
 }
 
 // =============================================================================
