@@ -42,16 +42,11 @@ impl EnvSet {
         let has_auth_token = std::env::var("ANTHROPIC_AUTH_TOKEN")
             .map(|v| !v.is_empty())
             .unwrap_or(false);
-        let has_api_key = std::env::var("ANTHROPIC_API_KEY")
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
 
         if is_passthrough {
-            // For passthrough: real credentials are forwarded by the proxy.
-            // Only inject a placeholder if the user has no real credentials at all.
-            if !has_auth_token && !has_api_key {
-                self.vars.push(("ANTHROPIC_API_KEY".into(), "anyclaude-proxy".into()));
-            }
+            // For passthrough: real credentials are forwarded by the proxy unchanged.
+            // Do not inject a placeholder — if the user has no credentials, let
+            // Claude Code show its normal login flow so the user can authenticate.
         } else {
             // For api_key / bearer: proxy handles all auth.
             // Inject placeholder key so Claude Code skips login check.
