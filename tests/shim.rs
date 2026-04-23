@@ -125,7 +125,7 @@ fn tmux_log_path_points_to_shim_dir() {
 #[test]
 fn tmux_shim_contains_session_token_header() {
     let token = "my-secret-session-token-42";
-    let shim = match TeammateShim::create(8080, token, "test-session", true) {
+    let shim = match TeammateShim::create(47190, token, "test-session", true) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -149,11 +149,11 @@ fn tmux_shim_contains_session_token_header() {
 
 #[test]
 fn tmux_shim_different_tokens_produce_different_scripts() {
-    let shim1 = match TeammateShim::create(8080, "token-aaa", "test-session", true) {
+    let shim1 = match TeammateShim::create(47190, "token-aaa", "test-session", true) {
         Ok(s) => s,
         Err(_) => return,
     };
-    let shim2 = match TeammateShim::create(8080, "token-bbb", "test-session", true) {
+    let shim2 = match TeammateShim::create(47190, "token-bbb", "test-session", true) {
         Ok(s) => s,
         Err(_) => return,
     };

@@ -125,8 +125,8 @@ max_retries = 3                   # Connection retry attempts
 retry_backoff_base_ms = 100       # Base backoff for retries (exponential)
 
 [proxy]
-bind_addr = "127.0.0.1:8080"      # Local proxy listen address (auto-increments if busy)
-base_url = "http://127.0.0.1:8080" # Base URL exposed to Claude Code
+bind_addr = "127.0.0.1:47190"      # Local proxy listen address (auto-increments if busy)
+base_url = "http://127.0.0.1:47190" # Base URL exposed to Claude Code
 
 [terminal]
 scrollback_lines = 10000          # History buffer size

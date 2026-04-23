@@ -98,16 +98,16 @@ fn classify_positional() {
 #[test]
 fn env_set_proxy_url() {
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:8080")
+        .with_proxy_url("http://127.0.0.1:47190")
         .build();
 
-    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:8080"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:47190"));
 }
 
 #[test]
 fn env_set_chaining() {
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:8080")
+        .with_proxy_url("http://127.0.0.1:47190")
         .with_extra(vec![("CUSTOM_VAR".into(), "value".into())])
         .build();
 

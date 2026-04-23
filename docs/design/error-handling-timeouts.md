@@ -410,7 +410,7 @@ use crate::proxy::timeout::TimeoutConfig;
 
 impl ProxyServer {
     pub fn new(config: ConfigStore) -> Self {
-        let addr = "127.0.0.1:8080".parse().expect("Invalid bind address");
+        let addr = "127.0.0.1:47190".parse().expect("Invalid bind address");
         let timeout_config = TimeoutConfig::from(&config.get().defaults);
         let router = RouterEngine::new(config, timeout_config);
         // ...
