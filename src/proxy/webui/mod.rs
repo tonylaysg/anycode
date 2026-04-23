@@ -30,7 +30,7 @@ async fn serve_index() -> impl IntoResponse {
 /// Optional Basic Auth state shared with the auth middleware.
 #[derive(Clone)]
 struct AuthState {
-    /// Pre-encoded `Basic <base64(:<password>)>` value, or None when auth disabled.
+    /// Pre-encoded `Basic <base64(username:password)>` value, or None when auth disabled.
     expected: Option<Arc<String>>,
 }
 
@@ -58,11 +58,10 @@ async fn basic_auth_middleware(
     next.run(req).await
 }
 
-/// Encode password into `Basic <base64(:<password>)>` header value.
-/// Username is intentionally empty; only password is checked.
-fn encode_basic_auth(password: &str) -> String {
+/// Encode username+password into `Basic <base64(username:password)>` header value.
+fn encode_basic_auth(username: &str, password: &str) -> String {
     use std::io::Write;
-    let input = format!(":{}", password);
+    let input = format!("{}:{}", username, password);
     let mut buf = Vec::new();
     // base64 encode manually using standard library
     // We use a simple byte-by-byte approach to avoid adding a dependency
@@ -104,16 +103,20 @@ fn build_webui_router(state: WebuiState, auth: AuthState) -> Router {
 
 /// Start the WebUI HTTP server.
 ///
-/// Binds to `bind_addr`, optionally enforces Basic Auth with `password`.
+/// Binds to `bind_addr`, optionally enforces Basic Auth with `username`+`password`.
 /// Returns the actual bound address (useful when port 0 is used).
 /// This function runs until the server exits.
 pub async fn run_webui_server(
     state: WebuiState,
     bind_addr: &str,
+    username: Option<&str>,
     password: Option<&str>,
 ) -> Result<std::net::SocketAddr, Box<dyn std::error::Error>> {
     let auth = AuthState {
-        expected: password.map(|p| Arc::new(encode_basic_auth(p))),
+        expected: match (username, password) {
+            (Some(u), Some(p)) => Some(Arc::new(encode_basic_auth(u, p))),
+            _ => None,
+        },
     };
 
     let app = build_webui_router(state, auth);
@@ -131,7 +134,7 @@ pub async fn run_webui_server(
 
 /// Bind the WebUI listener and return (SocketAddr, TcpListener).
 ///
-/// Separated from `run_webui_server` so the caller can log the address
+/// Separated from `serve_webui` so the caller can log the address
 /// before spawning the server task.
 pub async fn bind_webui(
     bind_addr: &str,
@@ -146,10 +149,14 @@ pub async fn bind_webui(
 pub async fn serve_webui(
     listener: TcpListener,
     state: WebuiState,
+    username: Option<String>,
     password: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let auth = AuthState {
-        expected: password.as_deref().map(|p| Arc::new(encode_basic_auth(p))),
+        expected: match (username.as_deref(), password.as_deref()) {
+            (Some(u), Some(p)) => Some(Arc::new(encode_basic_auth(u, p))),
+            _ => None,
+        },
     };
     let app = build_webui_router(state, auth);
     axum::serve(listener, app).await?;

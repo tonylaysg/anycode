@@ -68,8 +68,12 @@ pub struct WebuiConfig {
     /// Default: `127.0.0.1:47191` (localhost only).
     #[serde(default = "default_webui_bind_addr")]
     pub bind_addr: String,
+    /// Optional username for WebUI access (HTTP Basic Auth).
+    /// Must be set together with `password` to enable authentication.
+    #[serde(default)]
+    pub username: Option<String>,
     /// Optional password for WebUI access (HTTP Basic Auth).
-    /// Leave empty (or omit) to disable authentication.
+    /// Must be set together with `username` to enable authentication.
     /// Recommended when bind_addr is not 127.0.0.1.
     #[serde(default)]
     pub password: Option<String>,
@@ -339,6 +343,7 @@ impl Default for WebuiConfig {
     fn default() -> Self {
         Self {
             bind_addr: default_webui_bind_addr(),
+            username: None,
             password: None,
         }
     }

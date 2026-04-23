@@ -101,10 +101,87 @@ main() {
         installed_via="source"
     fi
 
-    # ── 写入默认配置（仅在配置文件不存在时）────────────────────────────────
+    # ── 交互式 WebUI 配置向导 ───────────────────────────────────────────────
+    local webui_user webui_pass webui_pass2 webui_bind webui_url
+
+    echo ""
+    echo -e "${CYAN}─────────────────────────────────────────${NC}"
+    echo -e "${CYAN}  WebUI 配置向导（管理界面账号与访问权限）${NC}"
+    echo -e "${CYAN}─────────────────────────────────────────${NC}"
+    echo ""
+
+    # 访问模式
+    echo -e "  请选择 WebUI 访问模式："
+    echo -e "    ${CYAN}1${NC}) 仅本机访问（localhost，最安全）"
+    echo -e "    ${CYAN}2${NC}) 局域网访问（内网所有设备可访问）"
+    echo -e "    ${CYAN}3${NC}) 公网访问（任意 IP 可访问，需设置密码）"
+    echo -n "  请输入选项 [1-3，默认 1]: "
+    local access_mode
+    read -r access_mode </dev/tty || true
+    access_mode="${access_mode:-1}"
+
+    case "$access_mode" in
+        2) webui_bind="0.0.0.0:47191" ;;
+        3) webui_bind="0.0.0.0:47191" ;;
+        *) webui_bind="127.0.0.1:47191" ;;
+    esac
+
+    # 是否启用账号密码
+    local enable_auth="n"
+    if [[ "$access_mode" == "2" || "$access_mode" == "3" ]]; then
+        echo -e "  ${YELLOW}提示：局域网/公网访问强烈建议设置账号密码${NC}"
+        enable_auth="y"
+    else
+        echo -n "  是否启用账号密码保护？[y/N，默认 N]: "
+        read -r enable_auth </dev/tty || true
+        enable_auth="${enable_auth:-n}"
+    fi
+
+    if [[ "$enable_auth" =~ ^[Yy]$ ]]; then
+        # 用户名
+        echo -n "  管理员用户名 [默认 admin]: "
+        read -r webui_user </dev/tty || true
+        webui_user="${webui_user:-admin}"
+
+        # 密码（带确认）
+        while true; do
+            echo -n "  管理员密码（输入不显示）: "
+            read -rs webui_pass </dev/tty || true
+            echo ""
+            if [[ -z "$webui_pass" ]]; then
+                echo -e "  ${RED}密码不能为空，请重新输入${NC}"
+                continue
+            fi
+            echo -n "  再次确认密码: "
+            read -rs webui_pass2 </dev/tty || true
+            echo ""
+            if [[ "$webui_pass" == "$webui_pass2" ]]; then
+                break
+            fi
+            echo -e "  ${RED}两次密码不一致，请重新输入${NC}"
+        done
+        success "账号密码已设置（用户名: ${webui_user}）"
+    else
+        webui_user=""
+        webui_pass=""
+        warn "未设置账号密码，WebUI 将无需登录即可访问"
+    fi
+
+    # ── 写入配置（仅在配置文件不存在时）──────────────────────────────────
     if [[ ! -f "$CONFIG_FILE" ]]; then
         mkdir -p "$CONFIG_DIR"
-        cat > "$CONFIG_FILE" <<'EOF'
+
+        # 构建 [webui] 段
+        local webui_section
+        webui_section="[webui]
+bind_addr = \"${webui_bind}\""
+        if [[ -n "$webui_user" && -n "$webui_pass" ]]; then
+            webui_section="${webui_section}
+username  = \"${webui_user}\"
+password  = \"${webui_pass}\""
+        fi
+
+        cat > "$CONFIG_FILE" <<EOF
 [defaults]
 active = "anthropic"
 
@@ -112,10 +189,7 @@ active = "anthropic"
 bind_addr = "127.0.0.1:47190"
 base_url  = "http://127.0.0.1:47190"
 
-[webui]
-bind_addr = "127.0.0.1:47191"
-# 如需局域网访问请改为: bind_addr = "0.0.0.0:47191"
-# 建议同时设置密码: password = "yourpassword"
+${webui_section}
 
 [[backends]]
 name         = "anthropic"
@@ -123,9 +197,20 @@ display_name = "Anthropic (官方)"
 base_url     = "https://api.anthropic.com"
 auth_type    = "passthrough"
 EOF
-        success "已生成默认配置: ${CONFIG_FILE}"
+        success "已生成配置: ${CONFIG_FILE}"
     else
-        info "配置文件已存在，跳过: ${CONFIG_FILE}"
+        info "配置文件已存在，跳过自动生成: ${CONFIG_FILE}"
+        warn "如需更新访问设置，请手动编辑 [webui] 段"
+    fi
+
+    # 计算 WebUI 访问 URL（用于最终提示）
+    if [[ "$webui_bind" == "0.0.0.0:47191" ]]; then
+        # 尝试获取本机局域网 IP
+        local lan_ip
+        lan_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_IP")
+        webui_url="http://${lan_ip}:47191"
+    else
+        webui_url="http://127.0.0.1:47191"
     fi
 
     # ── 检查 PATH ────────────────────────────────────────────────────────────
@@ -167,7 +252,10 @@ EOF
     echo -e "    ${CYAN}anyclaude --backend <name>${NC}  # 指定初始后端"
     echo ""
     echo -e "  ${YELLOW}Web 配置界面:${NC}"
-    echo -e "    启动后浏览器访问 ${CYAN}http://127.0.0.1:47191${NC}"
+    echo -e "    启动后浏览器访问 ${CYAN}${webui_url}${NC}"
+    if [[ -n "$webui_user" ]]; then
+        echo -e "    登录账号: ${CYAN}${webui_user}${NC}  （密码已在安装时设置）"
+    fi
     echo -e "    可在线管理后端、切换 API 提供商（无需编辑文件）"
     echo ""
     if [[ -n "$shell_rc" ]]; then

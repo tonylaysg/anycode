@@ -168,17 +168,18 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         };
         match async_runtime.block_on(crate::proxy::webui::bind_webui(&webui_cfg.bind_addr)) {
             Ok((webui_addr, webui_listener)) => {
+                let username = webui_cfg.username.clone();
                 let password = webui_cfg.password.clone();
-                let password_note = if password.is_some() { " (密码保护)" } else { "" };
+                let auth_note = if username.is_some() && password.is_some() { " (账号密码保护)" } else { "" };
                 crate::metrics::app_log(
                     "webui",
                     &format!(
                         "Config UI available at http://{}/ui/{}",
-                        webui_addr, password_note
+                        webui_addr, auth_note
                     ),
                 );
                 async_runtime.spawn(async move {
-                    if let Err(err) = crate::proxy::webui::serve_webui(webui_listener, webui_state, password).await {
+                    if let Err(err) = crate::proxy::webui::serve_webui(webui_listener, webui_state, username, password).await {
                         crate::metrics::app_log_error("webui", "WebUI server exited", &err.to_string());
                     }
                 });
