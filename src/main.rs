@@ -67,6 +67,9 @@ enum Commands {
         /// Run as background daemon (detach from terminal, write PID file)
         #[arg(long, short = 'd')]
         daemon: bool,
+        /// Stop the running WebUI daemon
+        #[arg(long)]
+        stop: bool,
     },
 
     /// Change WebUI access mode (local / lan / public / custom address)
@@ -81,6 +84,29 @@ enum Commands {
 }
 
 // ── PID 文件工具 ──────────────────────────────────────────────────────────────
+
+fn webui_pid_file_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".config/anyclaude/webui.pid")
+}
+
+fn read_webui_pid() -> Option<u32> {
+    std::fs::read_to_string(webui_pid_file_path())
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+}
+
+fn is_process_running(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+    #[cfg(not(target_os = "linux"))]
+    unsafe {
+        libc::kill(pid as libc::pid_t, 0) == 0
+    }
+}
 
 fn pid_file_path() -> PathBuf {
     dirs::home_dir()
@@ -123,11 +149,28 @@ impl Drop for PidGuard {
 // ── 子命令实现 ────────────────────────────────────────────────────────────────
 
 fn cmd_status() -> io::Result<()> {
+    // ── 主进程 (TUI + 代理) ──────────────────────────────────────────────────
     match read_pid() {
         Some(pid) if is_anyclaude_running(pid) => {
-            println!("● anyclaude 正在运行  (PID: {})", pid);
+            println!("● anyclaude 主进程  正在运行  (PID: {})", pid);
             if let Ok(cfg) = Config::load() {
                 println!("  代理地址:  http://{}", cfg.proxy.bind_addr);
+            }
+        }
+        Some(_) => {
+            println!("○ anyclaude 主进程  未运行（清理过期 PID）");
+            let _ = std::fs::remove_file(pid_file_path());
+        }
+        None => {
+            println!("○ anyclaude 主进程  未运行");
+        }
+    }
+
+    // ── WebUI 守护进程 ────────────────────────────────────────────────────────
+    match read_webui_pid() {
+        Some(pid) if is_process_running(pid) => {
+            println!("● WebUI 守护进程  正在运行  (PID: {})", pid);
+            if let Ok(cfg) = Config::load() {
                 println!("  WebUI地址: http://{}", cfg.webui.bind_addr);
                 if cfg.webui.username.is_some() {
                     println!("  WebUI认证: 已启用（需要账号密码）");
@@ -135,11 +178,11 @@ fn cmd_status() -> io::Result<()> {
             }
         }
         Some(_) => {
-            println!("○ anyclaude 未运行（存在过期 PID 文件，将清理）");
-            let _ = std::fs::remove_file(pid_file_path());
+            println!("○ WebUI 守护进程  未运行（清理过期 PID）");
+            let _ = std::fs::remove_file(webui_pid_file_path());
         }
         None => {
-            println!("○ anyclaude 未运行");
+            println!("○ WebUI 守护进程  未运行  (使用 'anyclaude webui --daemon' 启动)");
         }
     }
     Ok(())
@@ -239,6 +282,29 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     }
 
     println!("卸载完成");
+    Ok(())
+}
+
+fn cmd_webui_stop() -> io::Result<()> {
+    match read_webui_pid() {
+        Some(pid) if is_process_running(pid) => {
+            let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+            if ret == 0 {
+                println!("已向 WebUI 守护进程 (PID: {}) 发送停止信号", pid);
+                let _ = std::fs::remove_file(webui_pid_file_path());
+            } else {
+                eprintln!("发送停止信号失败，请手动执行: kill {}", pid);
+                std::process::exit(1);
+            }
+        }
+        Some(_) => {
+            println!("WebUI 守护进程未运行，清理过期 PID 文件");
+            let _ = std::fs::remove_file(webui_pid_file_path());
+        }
+        None => {
+            println!("WebUI 守护进程未运行");
+        }
+    }
     Ok(())
 }
 
@@ -485,7 +551,12 @@ fn main() -> io::Result<()> {
             Commands::Logs { lines, follow } => cmd_logs(lines, follow),
             Commands::Stop => cmd_stop(),
             Commands::Uninstall { purge, yes } => cmd_uninstall(purge, yes),
-            Commands::Webui { bind, daemon } => cmd_webui(bind, daemon),
+            Commands::Webui { bind, daemon, stop } => {
+                if stop {
+                    return cmd_webui_stop();
+                }
+                cmd_webui(bind, daemon)
+            }
             Commands::Bind { mode } => cmd_bind(&mode),
             Commands::Passwd => cmd_passwd(),
         };
