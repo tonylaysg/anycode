@@ -58,6 +58,13 @@ enum Commands {
         #[arg(short, long)]
         yes: bool,
     },
+
+    /// Start the WebUI configuration server (without launching Claude Code)
+    Webui {
+        /// Override bind address (e.g. 0.0.0.0:47191 for LAN access)
+        #[arg(long, value_name = "ADDR")]
+        bind: Option<String>,
+    },
 }
 
 // ── PID 文件工具 ──────────────────────────────────────────────────────────────
@@ -222,6 +229,59 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     Ok(())
 }
 
+fn cmd_webui(bind_override: Option<String>) -> io::Result<()> {
+    let config = match Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: Failed to load config: {}", e);
+            eprintln!("Config file: {}", Config::config_path().display());
+            std::process::exit(1);
+        }
+    };
+
+    let bind_addr = bind_override
+        .unwrap_or_else(|| config.webui.bind_addr.clone());
+    let username = config.webui.username.clone();
+    let password = config.webui.password.clone();
+
+    let auth_note = if username.is_some() && password.is_some() {
+        " (账号密码保护)"
+    } else {
+        " (无需认证)"
+    };
+
+    let config_path = Config::config_path();
+    let config_store = anyclaude::config::ConfigStore::new(config.clone(), config_path);
+    let backend_state = anyclaude::backend::BackendState::from_config(config)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let webui_state = anyclaude::proxy::webui::WebuiState {
+        config_store,
+        backend_state,
+    };
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async move {
+        match anyclaude::proxy::webui::bind_webui(&bind_addr).await {
+            Ok((addr, listener)) => {
+                println!("WebUI 已启动: http://{}{}", addr, auth_note);
+                println!("按 Ctrl+C 停止");
+                if let Err(e) = anyclaude::proxy::webui::serve_webui(listener, webui_state, username, password).await {
+                    eprintln!("WebUI 错误: {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: 无法绑定 {}: {}", bind_addr, e);
+                std::process::exit(1);
+            }
+        }
+    });
+
+    Ok(())
+}
+
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
 fn main() -> io::Result<()> {
@@ -234,6 +294,7 @@ fn main() -> io::Result<()> {
             Commands::Logs { lines, follow } => cmd_logs(lines, follow),
             Commands::Stop => cmd_stop(),
             Commands::Uninstall { purge, yes } => cmd_uninstall(purge, yes),
+            Commands::Webui { bind } => cmd_webui(bind),
         };
     }
 
