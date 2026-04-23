@@ -225,6 +225,9 @@ async fn auth_mw(State(app): State<AppState>, req: Request<Body>, next: Next) ->
 
 fn build_router(app: AppState) -> Router {
     Router::new()
+        // Redirect root and /ui to /ui/ so bookmarks to port root work
+        .route("/",    get(|| async { Redirect::permanent("/ui/") }))
+        .route("/ui",  get(|| async { Redirect::permanent("/ui/") }))
         .route("/ui/",                          get(serve_index))
         .route("/login",                        get(handler_login_get).post(handler_login_post))
         .route("/logout",                       post(handler_logout))

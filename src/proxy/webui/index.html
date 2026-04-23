@@ -63,6 +63,8 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
 <div class="topbar">
   <h1>AnyClaude</h1>
   <span class="badge" id="active-badge">加载中...</span>
+  <div style="flex:1"></div>
+  <button class="btn btn-ghost btn-sm" onclick="logout()" style="font-size:.8rem">退出登录</button>
 </div>
 <div class="container">
   <div id="alert-area"></div>
@@ -389,6 +391,11 @@ function showAlert(msg, type) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function logout() {
+  await fetch('/logout', { method: 'POST' });
+  location.href = '/login';
 }
 
 loadConfig();

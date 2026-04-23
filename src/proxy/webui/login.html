@@ -119,7 +119,8 @@ document.getElementById('form').addEventListener('submit', async function(e) {
   });
   const res = await fetch('/login', { method: 'POST', body });
   if (res.ok) {
-    const redir = new URLSearchParams(location.search).get('next') || '/ui/';
+    let redir = new URLSearchParams(location.search).get('next') || '/ui/';
+    if (redir === '/' || redir === '') redir = '/ui/';
     location.href = redir;
   } else {
     err.textContent = '用户名或密码错误';
