@@ -1,80 +1,70 @@
 # AnyClaude
 
-TUI wrapper for Claude Code with hot-swappable backend support and transparent API proxying.
+[English](#english) | [中文](#中文)
 
-**Goal:** Make switching between API providers effortless. Configure all your backends once, then switch between them with a single hotkey — no config edits, no restarts, no interruptions.
+---
 
-**Note:** Only Anthropic API-compatible backends are supported.
+## English
 
-## Why?
+TUI wrapper for Claude Code with hot-swappable API backend support.
 
-Claude Code is great, but sometimes you need a different provider — maybe Anthropic is down, rate-limited, or you want to use another Anthropic-compatible backend. Without AnyClaude, switching means editing config files or environment variables every time.
+**Goal:** Switch between API providers instantly — configure once, swap with `Ctrl+B`, no restarts or config edits required.
 
-AnyClaude solves this:
+> Only Anthropic API-compatible backends are supported.
 
-- Configure all backends once
-- Switch with `Ctrl+B` mid-session
-- No restarts, no config edits
+### Features
 
-## Features
+- **Hot-Swap Backends** — Switch providers mid-session with `Ctrl+B`
+- **Agent Routing** — Route subagents and teammates to separate backends
+- **Thinking Block Filtering** — Automatically filters previous backend's thinking blocks on switch
+- **Adaptive Thinking Conversion** — Converts adaptive thinking for non-Anthropic backends (`thinking_compat`)
+- **Model Mapping** — Remap model names per backend
+- **Transparent Proxy** — Routes all Claude Code API requests through active backend
+- **WebUI** — Browser-based backend management, no config editing needed
+- **Debug Logging** — Configurable request/response logging
 
-- **Hot-Swap Backends** — Switch between providers without restarting Claude
-- **Agent Routing** — Route teammates and subagents to separate backends with session affinity
-- **Thinking Block Filtering** — Automatic filtering of previous backend's thinking blocks on switch
-- **Adaptive Thinking Conversion** — Convert adaptive thinking to enabled format for non-Anthropic backends (`thinking_compat`)
-- **Model Mapping** — Remap model names per backend (`model_opus`, `model_sonnet`, `model_haiku`)
-- **Transparent Proxy** — Routes API requests through active backend
-- **Backend History** — View switch history with `Ctrl+H`
-- **Debug Logging** — Request/response logging with configurable detail levels
+### Installation
 
-## Architecture
-
-```
-┌─────────────────────────────┐
-│        AnyClaude TUI        │
-└──────────────┬──────────────┘
-               │
-        ┌──────▼──────┐
-        │ Claude Code │ (main + subagents + teammates)
-        └──────┬──────┘
-               │ ANTHROPIC_BASE_URL
-        ┌──────▼──────┐
-        │  7-Stage    │
-        │  Pipeline   │
-        └─┬─────┬───┬─┘
-          │     │   │
-    /v1/* │     │   │ /teammate/{id}/v1/*
-          │     │   │
-   ┌──────▼┐ ┌─▼──────────┐ ┌─▼──────────┐
-   │Active │ │  Subagent   │ │  Teammate   │
-   │Backend│ │  Backend    │ │  Backend    │
-   └───────┘ └─────────────┘ └─────────────┘
-```
-
-The main agent's requests go through the active backend (switchable via `Ctrl+B`).
-Subagents are pinned to a backend via session affinity (AC markers in CC hooks).
-Teammate agents are routed via `/teammate/{agent_id}` URL path prefix.
-
-## Installation
+**One-line install (recommended):**
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/tonylaysg/anyclaude/main/install.sh | bash
+```
+
+The installer will:
+- Auto-detect your platform (Linux/macOS, x86_64/aarch64)
+- Download the prebuilt binary or build from source
+- Walk you through WebUI access and password setup
+- Add the binary to your PATH
+
+**Build from source:**
+
+```bash
+# Requires Rust (https://rustup.rs)
 cargo install --path .
 ```
 
-Or build manually:
+### Quick Start
 
-```bash
-cargo build --release
-# binary at ./target/release/anyclaude
+1. Run `anyclaude` — this starts the TUI with Claude Code embedded
+2. Configure backends via WebUI at `http://127.0.0.1:47191`
+3. Press `Ctrl+B` to switch backends at any time
+
+### Commands
+
 ```
-
-## Usage
-
-The wrapper automatically:
-1. Starts a local proxy (port auto-assigned starting from configured `bind_addr`)
-2. Sets `ANTHROPIC_BASE_URL` environment variable
-3. Spawns Claude Code in an embedded terminal
-4. Routes all API requests through the active backend
+anyclaude                          Start TUI (default backend)
+anyclaude --backend <name>        Start with specific backend
+anyclaude status                  Show running instance status
+anyclaude logs [-n 50] [-f]      View or follow debug logs
+anyclaude stop                    Stop running instance
+anyclaude webui                   Start WebUI configuration server
+anyclaude webui --daemon          Start WebUI in background
+anyclaude bind [local|lan|public] Change WebUI access mode
+anyclaude passwd                  Set WebUI login credentials
+anyclaude uninstall               Uninstall (keeps config)
+anyclaude uninstall --purge       Uninstall and remove all config
+```
 
 ### Hotkeys
 
@@ -87,11 +77,11 @@ The wrapper automatically:
 | `Ctrl+Q` | Quit |
 | `1-9` | Quick-select backend (in switcher) |
 
-## Configuration
+### Configuration
 
-Config location: `~/.config/anyclaude/config.toml`
+Config file: `~/.config/anyclaude/config.toml`
 
-### Minimal Example
+**Minimal:**
 
 ```toml
 [defaults]
@@ -101,7 +91,7 @@ active = "anthropic"
 name = "anthropic"
 display_name = "Anthropic"
 base_url = "https://api.anthropic.com"
-auth_type = "passthrough"  # Forward Claude Code's auth headers
+auth_type = "passthrough"
 
 [[backends]]
 name = "alternative"
@@ -111,50 +101,38 @@ auth_type = "bearer"
 api_key = "your-api-key"
 ```
 
-### Full Example
+**Full example:**
 
 ```toml
 [defaults]
-active = "anthropic"              # Default backend at startup
-timeout_seconds = 300             # Overall request timeout
-connect_timeout_seconds = 5       # TCP connection timeout
-idle_timeout_seconds = 60         # Streaming response idle timeout
-pool_idle_timeout_seconds = 90    # Connection pool idle timeout
-pool_max_idle_per_host = 8        # Max idle connections per host
-max_retries = 3                   # Connection retry attempts
-retry_backoff_base_ms = 100       # Base backoff for retries (exponential)
+active = "anthropic"
+timeout_seconds = 300
+connect_timeout_seconds = 5
+idle_timeout_seconds = 60
 
 [proxy]
-bind_addr = "127.0.0.1:47190"      # Local proxy listen address (auto-increments if busy)
-base_url = "http://127.0.0.1:47190" # Base URL exposed to Claude Code
+bind_addr = "127.0.0.1:47190"
+base_url  = "http://127.0.0.1:47190"
 
 [webui]
-bind_addr = "127.0.0.1:47191"      # WebUI listen address; use 0.0.0.0:47191 for LAN access
-# password = "yourpassword"        # Optional: enable Basic Auth (recommended for LAN/remote)
+bind_addr = "127.0.0.1:47191"
+# username = "admin"
+# password = "yourpassword"
 
 [terminal]
-scrollback_lines = 10000          # History buffer size
+scrollback_lines = 10000
 
 [debug_logging]
-level = "verbose"                 # "off", "basic", "verbose", "full"
-format = "console"                # "console", "json"
-destination = "file"              # "stderr", "file", "both"
-file_path = "~/.config/anyclaude/logs/debug.log"
-body_preview_bytes = 1024         # Max bytes of request/response body to log
-header_preview = true             # Log request/response headers
-full_body = false                 # Log full bodies (no size limit)
-pretty_print = true               # Pretty-print JSON bodies
-
-[debug_logging.rotation]
-mode = "none"                     # "none", "size", "daily"
-max_bytes = 10485760              # Max log file size before rotation (10 MB)
-max_files = 5                     # Max rotated log files to keep
+level       = "verbose"   # off | basic | verbose | full
+destination = "file"      # stderr | file | both
+file_path   = "~/.config/anyclaude/logs/debug.log"
+format      = "console"   # console | json
 
 [[backends]]
 name = "anthropic"
 display_name = "Anthropic"
 base_url = "https://api.anthropic.com"
-auth_type = "passthrough"         # Forward Claude Code's auth headers
+auth_type = "passthrough"
 
 [[backends]]
 name = "alternative"
@@ -162,154 +140,273 @@ display_name = "Alternative Provider"
 base_url = "https://your-provider.com/api"
 auth_type = "bearer"
 api_key = "your-api-key"
-thinking_compat = true            # Convert adaptive->enabled thinking for this backend
-thinking_budget_tokens = 10000    # Budget for conversion (default: 10000)
-model_opus = "custom-opus-model"  # Remap opus-family model requests
-model_sonnet = "custom-sonnet"    # Remap sonnet-family model requests
-model_haiku = "custom-haiku"      # Remap haiku-family model requests
+thinking_compat = true          # Convert adaptive->enabled thinking
+thinking_budget_tokens = 10000
+model_opus   = "custom-opus"
+model_sonnet = "custom-sonnet"
+model_haiku  = "custom-haiku"
 
-[[backends]]
-name = "custom"
-display_name = "Custom Provider"
-base_url = "https://my-proxy.example.com"
-auth_type = "passthrough"         # Forward original auth headers
-
-[backends.pricing]
-input_per_million = 3.00          # Cost per million input tokens
-output_per_million = 15.00        # Cost per million output tokens
-
-# Route agents to different backends
 [agents]
-teammate_backend = "alternative"  # Backend for teammate agents
-subagent_backend = "alternative"  # Backend for subagents (optional)
+teammate_backend = "alternative"
+subagent_backend = "alternative"
 ```
 
-### Authentication Types
+**Authentication types:**
 
-| Type | Header | Use Case |
-|------|--------|----------|
-| `api_key` | `x-api-key: <value>` | Anthropic API |
-| `bearer` | `Authorization: Bearer <value>` | Most providers |
-| `passthrough` | Forwards original headers | OAuth flows, custom auth |
+| Type | Header sent | Use case |
+|------|-------------|----------|
+| `passthrough` | Forwards original headers | Anthropic OAuth, custom auth |
+| `api_key` | `x-api-key: <value>` | Anthropic API key |
+| `bearer` | `Authorization: Bearer <value>` | Most third-party providers |
 
 ### Model Mapping
 
-Backends can remap Anthropic model names to provider-specific ones. The proxy matches the request model against family keywords (`opus`, `sonnet`, `haiku`) and substitutes the configured name.
+Map Anthropic model families to provider-specific names:
 
 ```toml
 [[backends]]
-name = "my-provider"
-base_url = "https://api.example.com"
-auth_type = "bearer"
-api_key = "key"
-model_opus = "provider-large"     # claude-opus-4-6 -> provider-large
-model_sonnet = "provider-medium"  # claude-sonnet-4-5 -> provider-medium
-model_haiku = "provider-small"    # claude-haiku-4-5 -> provider-small
+name         = "my-provider"
+base_url     = "https://api.example.com"
+auth_type    = "bearer"
+api_key      = "key"
+model_opus   = "provider-large"   # claude-opus-*  -> provider-large
+model_sonnet = "provider-medium"  # claude-sonnet-* -> provider-medium
+model_haiku  = "provider-small"   # claude-haiku-*  -> provider-small
 ```
 
-Only configured families are remapped. Omitted families pass through unchanged.
-
-Responses are automatically reverse-mapped: if the backend returns its own model name (e.g. `provider-large`), the proxy rewrites it back to the original name (e.g. `claude-opus-4-6`) so Claude Code sees a consistent model identity.
+Responses are reverse-mapped so Claude Code always sees consistent model names.
 
 ### Agent Routing
 
-Route Claude Code's subagents and teammates to separate backends. Useful when you want the main agent on a premium provider and agents on a cheaper one.
-
-Requires Claude Code's experimental agent teams feature. Enable it via `Ctrl+E` > Settings in the TUI.
-
 ```toml
 [agents]
-teammate_backend = "alternative"  # Backend for teammate agents
-subagent_backend = "alternative"  # Backend for subagents (optional)
+teammate_backend = "alternative"
+subagent_backend = "alternative"
 ```
 
-How it works:
-- The main agent's requests go to the active backend (switchable via `Ctrl+B`)
-- **Subagents** are registered via CC hooks (SubagentStart/SubagentStop) and pinned to a backend for their lifetime via session affinity. The subagent backend is also switchable via `Ctrl+B`
-- **Teammates** are intercepted via a tmux shim and routed through `/teammate/{agent_id}/*` to the fixed `teammate_backend`
-- Thinking block filtering is not applied to agent requests
-- Backend switching does not affect agent routing
+- Main agent uses the active backend (switchable via `Ctrl+B`)
+- Subagents are pinned per-session via CC hooks
+- Teammates are routed via tmux shim
 
 ### Thinking Block Handling
 
-AnyClaude handles two separate problems with thinking blocks when proxying through multiple backends.
+**Filtering (always active):** When switching backends mid-session, thinking blocks from the old backend are automatically removed. Each provider's thinking blocks contain cryptographic signatures that other providers reject.
 
-#### 1. Thinking block filtering (always active)
-
-Each provider's thinking blocks contain cryptographic signatures tied to that provider. When you switch backends mid-session, the conversation history includes thinking blocks from the previous provider. The new provider rejects these as invalid, causing 400 errors.
-
-AnyClaude tracks all thinking blocks by content hash and automatically filters out blocks from previous sessions on backend switch. This works unconditionally for all backends — no configuration needed.
-
-#### 2. Adaptive thinking conversion (`thinking_compat`)
-
-Claude Code uses **adaptive thinking** — `"thinking": {"type": "adaptive"}`, where the model decides when and how much to think. The native Anthropic API supports this, but non-Anthropic backends don't. They require the explicit format: `"thinking": {"type": "enabled", "budget_tokens": N}`.
-
-Set `thinking_compat = true` on non-Anthropic backends to enable conversion:
-
-- **Request body:** `adaptive` -> `enabled` with a configurable token budget
-- **Header:** `anthropic-beta: adaptive-thinking-*` -> `interleaved-thinking-2025-05-14`
+**Conversion (`thinking_compat`):** Claude Code uses adaptive thinking, which non-Anthropic backends don't support. Set `thinking_compat = true` to convert it to the explicit `enabled` format:
 
 ```toml
 [[backends]]
 name = "alternative"
 base_url = "https://your-provider.com/api"
 auth_type = "bearer"
-api_key = "your-api-key"
-thinking_compat = true            # Convert adaptive->enabled thinking
-thinking_budget_tokens = 10000    # Budget for conversion (default: 10000)
+api_key = "key"
+thinking_compat = true
+thinking_budget_tokens = 10000
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `thinking_compat` | `false` | Convert adaptive thinking to explicit enabled format |
-| `thinking_budget_tokens` | `10000` | Token budget for conversion. If the request has `max_tokens`, uses `max_tokens - 1` instead |
+---
 
-**Note:** Anthropic's own API handles adaptive thinking natively — only enable `thinking_compat` for third-party backends.
+## 中文
 
-### Debug Logging
+Claude Code 的 TUI 包装器，支持一键热切换 API 后端。
 
-Enable detailed request/response logging for debugging:
+**目标：** 随时切换 API 服务商，只需配置一次，按 `Ctrl+B` 切换，无需重启或修改配置文件。
+
+> 仅支持兼容 Anthropic API 格式的后端。
+
+### 功能特性
+
+- **热切换后端** — 按 `Ctrl+B` 即时切换服务商，无需重启
+- **Agent 路由** — 将子 Agent 和 Teammate 分配到不同后端
+- **思考块过滤** — 切换后端时自动过滤旧后端的 thinking block
+- **Adaptive Thinking 转换** — 非 Anthropic 后端自动转换 thinking 格式（`thinking_compat`）
+- **模型名映射** — 每个后端可独立配置模型名映射
+- **透明代理** — 所有 API 请求自动路由到当前后端
+- **WebUI 管理界面** — 浏览器在线管理后端配置，无需手动编辑文件
+- **调试日志** — 可配置详细程度的请求/响应日志
+
+### 安装
+
+**一键安装（推荐）：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tonylaysg/anyclaude/main/install.sh | bash
+```
+
+安装程序会自动：
+- 检测系统平台（Linux/macOS，x86_64/aarch64）
+- 下载预编译二进制包（若不可用则从源码编译）
+- 引导配置 WebUI 访问权限及账号密码
+- 自动将二进制文件添加到 PATH
+
+**从源码编译：**
+
+```bash
+# 需要 Rust (https://rustup.rs)
+cargo install --path .
+```
+
+### 快速上手
+
+1. 运行 `anyclaude` — 启动 TUI，内嵌 Claude Code
+2. 访问 `http://127.0.0.1:47191` 通过 WebUI 配置后端
+3. 随时按 `Ctrl+B` 切换后端
+
+### 命令
+
+```
+anyclaude                          启动 TUI（使用默认后端）
+anyclaude --backend <名称>        指定初始后端启动
+anyclaude status                  查看运行状态
+anyclaude logs [-n 50] [-f]      查看 / 实时追踪日志
+anyclaude stop                    停止运行中的实例
+anyclaude webui                   启动 WebUI 配置服务
+anyclaude webui --daemon          后台模式启动 WebUI
+anyclaude bind [local|lan|public] 更改 WebUI 访问模式
+anyclaude passwd                  设置 WebUI 登录密码
+anyclaude uninstall               卸载（保留配置文件）
+anyclaude uninstall --purge       完全卸载（含配置文件）
+```
+
+### 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+B` | 打开后端切换弹窗 |
+| `Ctrl+H` | 查看后端切换历史 |
+| `Ctrl+E` | 打开设置对话框 |
+| `Ctrl+R` | 重启 Claude Code（保留会话） |
+| `Ctrl+Q` | 退出 |
+| `1-9` | 在切换弹窗中快速选择后端 |
+
+### 配置
+
+配置文件位置：`~/.config/anyclaude/config.toml`
+
+**最简配置：**
 
 ```toml
+[defaults]
+active = "anthropic"
+
+[[backends]]
+name         = "anthropic"
+display_name = "Anthropic（官方）"
+base_url     = "https://api.anthropic.com"
+auth_type    = "passthrough"
+
+[[backends]]
+name         = "alternative"
+display_name = "其他服务商"
+base_url     = "https://your-provider.com/api"
+auth_type    = "bearer"
+api_key      = "your-api-key"
+```
+
+**完整配置示例：**
+
+```toml
+[defaults]
+active                   = "anthropic"
+timeout_seconds          = 300
+connect_timeout_seconds  = 5
+idle_timeout_seconds     = 60
+
+[proxy]
+bind_addr = "127.0.0.1:47190"
+base_url  = "http://127.0.0.1:47190"
+
+[webui]
+bind_addr = "127.0.0.1:47191"
+# username = "admin"
+# password = "yourpassword"
+
+[terminal]
+scrollback_lines = 10000
+
 [debug_logging]
-level = "verbose"                  # "off" | "basic" | "verbose" | "full"
-destination = "file"               # "stderr" | "file" | "both"
-file_path = "~/.config/anyclaude/logs/debug.log"
-format = "console"                 # "console" | "json"
-pretty_print = true                # Pretty-print JSON bodies
-full_body = false                  # Log complete bodies (no size limit)
-body_preview_bytes = 1024          # Truncate preview if full_body = false
-header_preview = true              # Include headers in logs
+level       = "verbose"   # off | basic | verbose | full
+destination = "file"      # stderr | file | both
+file_path   = "~/.config/anyclaude/logs/debug.log"
+format      = "console"   # console | json
 
-[debug_logging.rotation]
-mode = "size"                      # "none" | "size" | "daily"
-max_bytes = 10485760               # 10MB
-max_files = 5                      # Keep 5 rotated files
+[[backends]]
+name         = "anthropic"
+display_name = "Anthropic（官方）"
+base_url     = "https://api.anthropic.com"
+auth_type    = "passthrough"
+
+[[backends]]
+name                   = "alternative"
+display_name           = "其他服务商"
+base_url               = "https://your-provider.com/api"
+auth_type              = "bearer"
+api_key                = "your-api-key"
+thinking_compat        = true   # 转换 adaptive thinking 格式
+thinking_budget_tokens = 10000
+model_opus             = "custom-opus"
+model_sonnet           = "custom-sonnet"
+model_haiku            = "custom-haiku"
+
+[agents]
+teammate_backend = "alternative"
+subagent_backend = "alternative"
 ```
 
-| Level | Content |
-|-------|---------|
-| `off` | Disabled (default) |
-| `basic` | Request timestamps, status codes, latency |
-| `verbose` | + Token counts, model info, cost estimates |
-| `full` | + Request/response body previews, headers |
+**认证类型说明：**
 
-## Development
+| 类型 | 发送的 Header | 适用场景 |
+|------|--------------|----------|
+| `passthrough` | 透传原始 Header | Anthropic OAuth、自定义认证 |
+| `api_key` | `x-api-key: <value>` | Anthropic API Key |
+| `bearer` | `Authorization: Bearer <value>` | 大多数第三方服务商 |
 
-```bash
-just check              # Run lint + tests
-just release 0.5.0      # Tag a release (sets version, generates changelog, creates tag)
-just changelog          # Update CHANGELOG without releasing
+### 模型名映射
+
+将 Anthropic 模型族名映射到服务商自定义名称：
+
+```toml
+[[backends]]
+name         = "my-provider"
+base_url     = "https://api.example.com"
+auth_type    = "bearer"
+api_key      = "key"
+model_opus   = "provider-large"   # claude-opus-*   -> provider-large
+model_sonnet = "provider-medium"  # claude-sonnet-* -> provider-medium
+model_haiku  = "provider-small"   # claude-haiku-*  -> provider-small
 ```
 
-```bash
-./build.sh              # Build release binary (dev-stamped version)
-./build.sh release-tag  # Build release without dev version stamp
-./build.sh debug        # Build debug binary
-./build.sh test         # Run tests
-./build.sh clean        # Clean build artifacts
-./build.sh install      # Build and install to ~/.cargo/bin
+响应中会自动反向映射，Claude Code 始终看到一致的模型名。
+
+### Agent 路由
+
+```toml
+[agents]
+teammate_backend = "alternative"
+subagent_backend = "alternative"
 ```
+
+- 主 Agent 使用当前活跃后端（可通过 `Ctrl+B` 切换）
+- 子 Agent 通过 CC hooks 按会话绑定到指定后端
+- Teammate Agent 通过 tmux shim 路由
+
+### Thinking Block 处理
+
+**过滤（始终启用）：** 切换后端时，上一个后端产生的 thinking block 会被自动过滤。每个服务商的 thinking block 包含加密签名，换到其他服务商后会导致 400 错误。
+
+**格式转换（`thinking_compat`）：** Claude Code 使用 adaptive thinking 格式，非 Anthropic 后端不支持。设置 `thinking_compat = true` 可自动转换为 `enabled` 格式：
+
+```toml
+[[backends]]
+name                   = "alternative"
+base_url               = "https://your-provider.com/api"
+auth_type              = "bearer"
+api_key                = "key"
+thinking_compat        = true
+thinking_budget_tokens = 10000
+```
+
+---
 
 ## License
 

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO="arttttt/AnyClaude"
+REPO="tonylaysg/anyclaude"
 INSTALL_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/anyclaude"
 CONFIG_FILE="${CONFIG_DIR}/config.toml"
