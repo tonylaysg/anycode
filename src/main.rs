@@ -93,6 +93,12 @@ enum Commands {
 
 // ── PID 文件工具 ──────────────────────────────────────────────────────────────
 
+fn instances_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".config/anycode/instances")
+}
+
 fn webui_pid_file_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -116,34 +122,53 @@ fn is_process_running(pid: u32) -> bool {
     }
 }
 
-fn pid_file_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".config/anycode/anycode.pid")
+/// Returns the PID file path for this instance (keyed by PID for multi-instance support).
+fn instance_pid_file(pid: u32) -> PathBuf {
+    instances_dir().join(format!("{}.pid", pid))
 }
 
-fn read_pid() -> Option<u32> {
-    std::fs::read_to_string(pid_file_path())
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
+/// Write a per-instance PID file with mode info.
+fn write_instance_pid(pid: u32, mode: &str) -> io::Result<()> {
+    let dir = instances_dir();
+    std::fs::create_dir_all(&dir)?;
+    let path = instance_pid_file(pid);
+    std::fs::write(&path, format!("{}\n{}\n", pid, mode))?;
+    Ok(())
 }
 
-/// Returns true only when PID exists AND its /proc/PID/comm is "anycode".
-/// This prevents false-positives when the OS reuses a stale PID.
-fn is_anycode_running(pid: u32) -> bool {
-    // Primary: check /proc/<pid>/comm (Linux-only, fast)
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
-            return comm.trim() == "anycode";
+/// Read all running instances from the instances directory.
+struct InstanceInfo {
+    pid: u32,
+    mode: String,
+}
+
+fn list_running_instances() -> Vec<InstanceInfo> {
+    let dir = instances_dir();
+    let mut instances = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else { return instances };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("pid") { continue; }
+        if path.file_name().and_then(|n| n.to_str()) == Some("webui.pid") { continue; }
+        let Ok(content) = std::fs::read_to_string(&path) else { continue };
+        let mut lines = content.lines();
+        let Some(pid_str) = lines.next() else { continue };
+        let Ok(pid) = pid_str.trim().parse::<u32>() else { continue };
+        let mode = lines.next().unwrap_or("anycode").trim().to_string();
+        if is_process_running(pid) {
+            instances.push(InstanceInfo { pid, mode });
+        } else {
+            // Clean up stale PID file
+            let _ = std::fs::remove_file(&path);
         }
-        return false;
     }
-    // Fallback for non-Linux: signal-0 only (no process-identity check)
-    #[cfg(not(target_os = "linux"))]
-    unsafe {
-        libc::kill(pid as libc::pid_t, 0) == 0
-    }
+    instances
+}
+
+/// Backward-compat: returns true if the process is still running (same as is_process_running).
+#[allow(dead_code)]
+fn is_anycode_running(pid: u32) -> bool {
+    is_process_running(pid)
 }
 
 /// RAII guard that removes the PID file on drop.
@@ -157,20 +182,13 @@ impl Drop for PidGuard {
 // ── 子命令实现 ────────────────────────────────────────────────────────────────
 
 fn cmd_status() -> io::Result<()> {
-    // ── 主进程 (TUI + 代理) ──────────────────────────────────────────────────
-    match read_pid() {
-        Some(pid) if is_anycode_running(pid) => {
-            println!("● anycode 主进程  正在运行  (PID: {})", pid);
-            if let Ok(cfg) = Config::load() {
-                println!("  代理地址:  http://{}", cfg.proxy.bind_addr);
-            }
-        }
-        Some(_) => {
-            println!("○ anycode 主进程  未运行（清理过期 PID）");
-            let _ = std::fs::remove_file(pid_file_path());
-        }
-        None => {
-            println!("○ anycode 主进程  未运行");
+    // ── 运行中的实例 ──────────────────────────────────────────────────────────
+    let instances = list_running_instances();
+    if instances.is_empty() {
+        println!("○ 没有运行中的 anycode/anycopilot 实例");
+    } else {
+        for inst in &instances {
+            println!("● {}  正在运行  (PID: {})", inst.mode, inst.pid);
         }
     }
 
@@ -230,23 +248,23 @@ fn cmd_logs(lines: usize, follow: bool) -> io::Result<()> {
 }
 
 fn cmd_stop() -> io::Result<()> {
-    match read_pid() {
-        Some(pid) if is_anycode_running(pid) => {
-            let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-            if ret == 0 {
-                println!("已向 anycode (PID: {}) 发送停止信号", pid);
-            } else {
-                eprintln!("发送停止信号失败，请手动执行: kill {}", pid);
-                std::process::exit(1);
-            }
+    let instances = list_running_instances();
+    if instances.is_empty() {
+        println!("没有运行中的实例");
+        return Ok(());
+    }
+    let mut stopped = 0;
+    for inst in &instances {
+        let ret = unsafe { libc::kill(inst.pid as libc::pid_t, libc::SIGTERM) };
+        if ret == 0 {
+            println!("已向 {} (PID: {}) 发送停止信号", inst.mode, inst.pid);
+            stopped += 1;
+        } else {
+            eprintln!("发送停止信号失败 (PID: {})，请手动执行: kill {}", inst.pid, inst.pid);
         }
-        Some(_) => {
-            println!("anycode 未运行，清理过期 PID 文件");
-            let _ = std::fs::remove_file(pid_file_path());
-        }
-        None => {
-            println!("anycode 未运行");
-        }
+    }
+    if stopped == 0 {
+        std::process::exit(1);
     }
     Ok(())
 }
@@ -269,14 +287,12 @@ fn cmd_reset(yes: bool) -> io::Result<()> {
         }
     }
 
-    // 停止运行中的 anycode 实例
-    if let Some(pid) = read_pid() {
-        if is_anycode_running(pid) {
-            let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-            if ret == 0 {
-                println!("✓ 已停止 anycode (PID: {})", pid);
-                let _ = std::fs::remove_file(pid_file_path());
-            }
+    // 停止运行中的实例
+    for inst in list_running_instances() {
+        let ret = unsafe { libc::kill(inst.pid as libc::pid_t, libc::SIGTERM) };
+        if ret == 0 {
+            println!("✓ 已停止 {} (PID: {})", inst.mode, inst.pid);
+            let _ = std::fs::remove_file(instance_pid_file(inst.pid));
         }
     }
 
@@ -330,10 +346,8 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
         println!("✓ 已删除二进制: {}", binary_path.display());
     }
 
-    let pid_path = pid_file_path();
-    if pid_path.exists() {
-        let _ = std::fs::remove_file(&pid_path);
-    }
+    // Clean up any stale instance PID files
+    let _ = std::fs::remove_dir_all(instances_dir());
 
     if purge {
         let config_dir = dirs::home_dir()
@@ -672,13 +686,12 @@ fn run_main(run: RunArgs) -> io::Result<()> {
         }
     }
 
-    // Write PID file so `anycode status` / `stop` can find this process.
-    let pid_path = pid_file_path();
-    if let Some(parent) = pid_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(&pid_path, std::process::id().to_string());
+    // Write per-instance PID file so `anycode status` / `stop` can find this process.
+    let cli_mode = CliMode::detect();
+    let my_pid = std::process::id();
+    let pid_path = instance_pid_file(my_pid);
+    let _ = write_instance_pid(my_pid, cli_mode.binary());
     let _pid_guard = PidGuard(pid_path); // auto-deleted on exit
 
-    anycode::ui::run(CliMode::detect(), run.backend, run.args)
+    anycode::ui::run(cli_mode, run.backend, run.args)
 }
