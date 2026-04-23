@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use parking_lot::RwLock;
 
-use crate::config::{Backend, Config};
+use crate::config::{Backend, CliProfile};
 
 /// Errors that can occur during backend operations.
 #[derive(Debug, Clone)]
@@ -151,7 +151,7 @@ struct BackendStateInner {
     /// The currently active backend ID.
     active_backend: String,
     /// Full configuration (needed to look up backend details).
-    config: Config,
+    config: CliProfile,
     /// History of backend switches for debugging/auditing.
     switch_log: Vec<SwitchLogEntry>,
 }
@@ -162,7 +162,7 @@ impl BackendState {
     /// # Errors
     /// Returns error if no backends are configured or if the default
     /// backend specified in config doesn't exist.
-    pub fn from_config(config: Config) -> Result<Self, BackendError> {
+    pub fn from_config(config: CliProfile) -> Result<Self, BackendError> {
         if config.backends.is_empty() {
             return Err(BackendError::NoBackendsConfigured);
         }
@@ -236,12 +236,12 @@ impl BackendState {
     }
 
     /// Get the full current configuration.
-    pub fn get_config(&self) -> Config {
+    pub fn get_config(&self) -> CliProfile {
         self.inner.read().config.clone()
     }
 
     /// Get config and active backend atomically under a single lock.
-    pub fn get_config_and_active_backend(&self) -> (Config, String) {
+    pub fn get_config_and_active_backend(&self) -> (CliProfile, String) {
         let state = self.inner.read();
         (state.config.clone(), state.active_backend.clone())
     }
@@ -315,7 +315,7 @@ impl BackendState {
     ///
     /// If the current active backend no longer exists in the new config,
     /// it will be switched to the default or first available backend.
-    pub fn update_config(&self, new_config: Config) -> Result<(), BackendError> {
+    pub fn update_config(&self, new_config: CliProfile) -> Result<(), BackendError> {
         if new_config.backends.is_empty() {
             return Err(BackendError::NoBackendsConfigured);
         }

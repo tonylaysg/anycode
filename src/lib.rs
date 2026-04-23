@@ -1,6 +1,7 @@
 pub mod args;
 pub mod backend;
 pub mod clipboard;
+pub mod cli_mode;
 pub mod config;
 pub mod error;
 pub mod ipc;

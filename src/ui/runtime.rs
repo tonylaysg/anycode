@@ -37,7 +37,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         io::Error::new(io::ErrorKind::InvalidData, format!("Failed to load config: {}", e))
     })?;
     if let Some(backend_name) = backend_override {
-        config.defaults.active = backend_name;
+        config.claude.defaults.active = backend_name;
     }
     let config_path = Config::config_path();
     let config_store = ConfigStore::new(config, config_path);
@@ -70,11 +70,11 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     // vars are populated with the config's base_proxy_url at this point.
     let scrollback_lines = config_store.get().terminal.scrollback_lines;
     let mut settings_manager = ClaudeSettingsManager::new();
-    settings_manager.load_from_toml(&config_store.get().claude_settings);
+    settings_manager.load_from_toml(&config_store.get().claude.claude_settings);
     let is_passthrough = {
         let cfg = config_store.get();
-        cfg.backends.iter()
-            .find(|b| b.name == cfg.defaults.active)
+        cfg.claude.backends.iter()
+            .find(|b| b.name == cfg.claude.defaults.active)
             .map(|b| b.auth_type() == AuthType::Passthrough)
             .unwrap_or(true)
     };
@@ -697,7 +697,7 @@ async fn run_ui_bridge(
                     let _ = event_tx.send(AppEvent::IpcError(err.to_string()));
                 }
             },
-            UiCommand::ReloadConfig => match backend_state.update_config(config_store.get()) {
+            UiCommand::ReloadConfig => match backend_state.update_config(config_store.get().claude) {
                 Ok(()) => {
                     if let Ok(status) = ipc_client.get_status().await {
                         let _ = event_tx.send(AppEvent::IpcStatus(status));

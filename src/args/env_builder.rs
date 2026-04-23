@@ -35,7 +35,7 @@ impl EnvSet {
     ///
     /// * **api_key / bearer** (`is_passthrough = false`): the proxy strips
     ///   incoming auth and injects the backend's own key.  We must:
-    ///   1. Inject `ANTHROPIC_API_KEY=anyclaude-proxy` — keeps Claude Code happy.
+    ///   1. Inject `ANTHROPIC_API_KEY=anycode-proxy` — keeps Claude Code happy.
     ///   2. Explicitly unset `ANTHROPIC_AUTH_TOKEN` by setting it to empty — prevents
     ///      the "MAuth conflict" warning Claude Code emits when both are set.
     pub fn with_auth_bypass(mut self, is_passthrough: bool) -> Self {
@@ -50,7 +50,7 @@ impl EnvSet {
         } else {
             // For api_key / bearer: proxy handles all auth.
             // Inject placeholder key so Claude Code skips login check.
-            self.vars.push(("ANTHROPIC_API_KEY".into(), "anyclaude-proxy".into()));
+            self.vars.push(("ANTHROPIC_API_KEY".into(), "anycode-proxy".into()));
             // If a real auth token is present (e.g., from ~/.bashrc), clear it to
             // avoid Claude Code's "MAuth conflict" error.
             if has_auth_token {

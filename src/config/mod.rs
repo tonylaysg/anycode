@@ -1,8 +1,4 @@
-//! Configuration management for anyclaude.
-//!
-//! This module handles loading, parsing, and validating configuration
-//! from TOML files, as well as resolving API credentials from environment
-//! variables.
+//! Configuration management for anycode.
 
 mod auth;
 pub mod claude_settings;
@@ -16,10 +12,10 @@ pub use claude_settings::{
     ClaudeSettingsManager, SettingDef, SettingId, SettingSection, SettingsFieldSnapshot,
 };
 pub use credentials::{AuthType, CredentialStatus, SecureString};
-pub use loader::{save_claude_settings, save_config, ConfigError};
+pub use loader::{save_claude_settings, save_config, save_profile, ConfigError};
 pub use store::ConfigStore;
 pub use types::{
-    AgentsConfig, Backend, BackendPricing, Config, DebugLogDestination, DebugLogFormat,
-    DebugLogLevel, DebugLogRotation, DebugLogRotationMode, DebugLoggingConfig, Defaults,
-    ProxyConfig, TerminalConfig, WebuiConfig,
+    AgentsConfig, Backend, BackendPricing, CliProfile, Config, DebugLogDestination,
+    DebugLogFormat, DebugLogLevel, DebugLogRotation, DebugLogRotationMode, DebugLoggingConfig,
+    Defaults, ProxyConfig, TerminalConfig, WebuiConfig,
 };

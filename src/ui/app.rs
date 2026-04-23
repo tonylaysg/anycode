@@ -90,16 +90,16 @@ impl App {
     pub fn new(config: ConfigStore) -> Self {
         let now = Instant::now();
         let mut settings_manager = ClaudeSettingsManager::new();
-        settings_manager.load_from_toml(&config.get().claude_settings);
+        settings_manager.load_from_toml(&config.get().claude.claude_settings);
         let settings_saved_snapshot = settings_manager.snapshot_values();
 
         // Initialize subagent_backend from config
-        let subagent_backend = config.get().agents
+        let subagent_backend = config.get().claude.agents
             .as_ref()
             .and_then(|at| at.subagent_backend.clone());
 
         // Initialize teammate_backend from config
-        let teammate_backend = config.get().agents
+        let teammate_backend = config.get().claude.agents
             .as_ref()
             .map(|at| at.teammate_backend.clone());
 

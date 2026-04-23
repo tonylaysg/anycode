@@ -5,11 +5,11 @@
 
 set -euo pipefail
 
-REPO="tonylaysg/anyclaude"
+REPO="tonylaysg/anycode"
 INSTALL_DIR="${HOME}/.local/bin"
-CONFIG_DIR="${HOME}/.config/anyclaude"
+CONFIG_DIR="${HOME}/.config/anycode"
 CONFIG_FILE="${CONFIG_DIR}/config.toml"
-BINARY="anyclaude"
+BINARY="anycode"
 _TMP_DIR=""        # global — cleaned up by EXIT trap
 _STTY_SAVED=""     # saved terminal state — restored by EXIT trap
 
@@ -83,10 +83,10 @@ install_from_source() {
     fi
     _TMP_DIR="$(mktemp -d)"
     info "克隆仓库..."
-    git clone --depth=1 "https://github.com/${REPO}.git" "$_TMP_DIR/anyclaude"
+    git clone --depth=1 "https://github.com/${REPO}.git" "$_TMP_DIR/anycode"
     info "编译中（release），请稍候..."
-    (cd "$_TMP_DIR/anyclaude" && cargo build --release)
-    install -Dm755 "$_TMP_DIR/anyclaude/target/release/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    (cd "$_TMP_DIR/anycode" && cargo build --release)
+    install -Dm755 "$_TMP_DIR/anycode/target/release/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 }
 
 # ── 主安装流程 ────────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ main() {
         printf '  安装方式:  %s%s%s\n'   "$CYAN" "$installed_via" "$NC"
         printf '  配置文件:  %s%s%s（已保留）%s\n' "$CYAN" "$CONFIG_FILE" "$GREEN" "$NC"
         printf '\n'
-        printf '  如遇认证问题，可执行: %sanyclaude reset%s\n' "$CYAN" "$NC"
+        printf '  如遇认证问题，可执行: %sanycode reset%s\n' "$CYAN" "$NC"
         printf '\n'
         return 0
     fi
@@ -275,15 +275,15 @@ EOF
     printf '  配置文件:  %s%s%s\n'   "$CYAN" "$CONFIG_FILE"   "$NC"
     printf '\n'
     printf '  %s常用命令:%s\n' "$YELLOW" "$NC"
-    printf '    %sanyclaude%s                   # 启动 TUI\n'                 "$CYAN" "$NC"
-    printf '    %sanyclaude --backend <name>%s  # 指定初始后端\n'            "$CYAN" "$NC"
-    printf '    %sanyclaude status%s            # 查看运行状态\n'            "$CYAN" "$NC"
-    printf '    %sanyclaude logs%s              # 查看日志 (最近50行)\n'     "$CYAN" "$NC"
-    printf '    %sanyclaude logs -f%s           # 实时追踪日志\n'            "$CYAN" "$NC"
-    printf '    %sanyclaude stop%s              # 停止运行中的实例\n'         "$CYAN" "$NC"
-    printf '    %sanyclaude uninstall%s         # 卸载 (保留配置)\n'         "$CYAN" "$NC"
-    printf '    %sanyclaude uninstall --purge%s # 完全卸载 (含配置)\n'       "$CYAN" "$NC"
-    printf '    %sanyclaude reset%s            # 清理旧版 bug 残留的认证状态\n' "$CYAN" "$NC"
+    printf '    %sanycode%s                   # 启动 TUI\n'                 "$CYAN" "$NC"
+    printf '    %sanycode --backend <name>%s  # 指定初始后端\n'            "$CYAN" "$NC"
+    printf '    %sanycode status%s            # 查看运行状态\n'            "$CYAN" "$NC"
+    printf '    %sanycode logs%s              # 查看日志 (最近50行)\n'     "$CYAN" "$NC"
+    printf '    %sanycode logs -f%s           # 实时追踪日志\n'            "$CYAN" "$NC"
+    printf '    %sanycode stop%s              # 停止运行中的实例\n'         "$CYAN" "$NC"
+    printf '    %sanycode uninstall%s         # 卸载 (保留配置)\n'         "$CYAN" "$NC"
+    printf '    %sanycode uninstall --purge%s # 完全卸载 (含配置)\n'       "$CYAN" "$NC"
+    printf '    %sanycode reset%s            # 清理旧版 bug 残留的认证状态\n' "$CYAN" "$NC"
     printf '\n'
     printf '  %sWeb 配置界面:%s\n' "$YELLOW" "$NC"
     printf '    启动后访问: %s%s%s\n' "$CYAN" "$webui_url" "$NC"

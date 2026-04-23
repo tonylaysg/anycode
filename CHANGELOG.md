@@ -6,11 +6,11 @@ All notable changes to AnyClaude are documented in this file.
 
 ### Bug Fixes
 
-- Fix passthrough backends injecting fake `ANTHROPIC_API_KEY=anyclaude-proxy` when no credentials present — previously prevented Claude Code from showing its login screen on fresh installs
+- Fix passthrough backends injecting fake `ANTHROPIC_API_KEY=anycode-proxy` when no credentials present — previously prevented Claude Code from showing its login screen on fresh installs
 
 ### Features
 
-- Add `anyclaude reset` command to clear stale Claude Code auth state from previous sessions
+- Add `anycode reset` command to clear stale Claude Code auth state from previous sessions
 - Install script now detects existing installations and performs update-only (skips config wizard, preserves existing config)
 
 ## [0.5.0] - 2026-03-13

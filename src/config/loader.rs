@@ -4,8 +4,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+use crate::cli_mode::CliMode;
 use crate::config::credentials::CredentialStatus;
-use crate::config::types::{Backend, Config};
+use crate::config::types::{Backend, CliProfile, Config};
 
 /// Errors that can occur when loading configuration.
 #[derive(Debug, Error)]
@@ -29,11 +30,16 @@ pub enum ConfigError {
 }
 
 impl Config {
-    /// Returns the path to the configuration file.
-    ///
-    /// Uses `~/.config/anyclaude/config.toml` on Unix/macOS.
-    /// Falls back to current directory if home is unavailable.
+    /// Returns the path to the configuration file (`~/.config/anycode/config.toml`).
     pub fn config_path() -> PathBuf {
+        let config_dir = dirs::home_dir()
+            .map(|h| h.join(".config"))
+            .unwrap_or_else(|| PathBuf::from("."));
+        config_dir.join("anycode").join("config.toml")
+    }
+
+    /// Returns the legacy path used by the old `anyclaude` binary.
+    pub fn legacy_config_path() -> PathBuf {
         let config_dir = dirs::home_dir()
             .map(|h| h.join(".config"))
             .unwrap_or_else(|| PathBuf::from("."));
@@ -41,38 +47,37 @@ impl Config {
     }
 
     /// Loads configuration from the default config file.
-    ///
-    /// - If the file doesn't exist, returns `Config::default()`.
-    /// - If the file exists, parses it as TOML and validates.
-    /// - Returns an error if reading, parsing, or validation fails.
     pub fn load() -> Result<Self, ConfigError> {
-        Self::load_from(&Self::config_path())
+        let path = Self::config_path();
+        // Auto-migrate from legacy anyclaude directory if new path doesn't exist yet
+        if !path.exists() {
+            let legacy = Self::legacy_config_path();
+            if legacy.exists() {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::copy(&legacy, &path);
+            }
+        }
+        Self::load_from(&path)
     }
 
-    /// Loads configuration from a specific path.
-    ///
-    /// - If the file doesn't exist, returns `Config::default()`.
-    /// - If the file exists, parses it as TOML and validates.
-    /// - Returns an error if reading, parsing, or validation fails.
+    /// Loads configuration from a specific path, with automatic old-format migration.
     pub fn load_from(path: &Path) -> Result<Self, ConfigError> {
         if !path.exists() {
-            let config = Config::default();
-            return Ok(config);
+            return Ok(Config::default());
         }
 
-        // Open file and acquire shared lock for reading
         let file = File::open(path).map_err(|e| ConfigError::ReadError {
             path: path.to_path_buf(),
             source: e,
         })?;
 
-        // Acquire shared lock (blocks until available, allows concurrent readers)
         fs2::FileExt::lock_shared(&file).map_err(|e| ConfigError::ReadError {
             path: path.to_path_buf(),
             source: e,
         })?;
 
-        // Read content while holding the lock
         let mut content = String::new();
         (&file)
             .read_to_string(&mut content)
@@ -81,38 +86,42 @@ impl Config {
                 source: e,
             })?;
 
-        // Lock is automatically released when file is dropped
+        // Attempt migration from old flat format before deserializing
+        let content = migrate_config_content(&content);
 
         let config: Config = toml::from_str(&content).map_err(|e| ConfigError::ParseError {
             path: path.to_path_buf(),
             source: e,
         })?;
 
-        config.validate()?;
         Ok(config)
     }
 
-    /// Validates the configuration.
-    ///
-    /// Checks:
-    /// - At least one backend is configured
-    /// - The active backend exists in the backends list
-    /// - The active backend has valid credentials (or doesn't require them)
-    pub fn validate(&self) -> Result<(), ConfigError> {
-        if self.backends.is_empty() {
+    /// Validates the profile for a given CLI mode.
+    pub fn validate_for(&self, mode: CliMode) -> Result<(), ConfigError> {
+        let profile = self.profile(mode);
+        if profile.backends.is_empty() {
+            // Empty copilot profile is OK if not configured
+            if mode == CliMode::Copilot {
+                return Ok(());
+            }
             return Err(ConfigError::ValidationError {
-                message: "At least one backend must be configured".to_string(),
+                message: format!(
+                    "No backends configured for {} profile",
+                    mode.profile_key()
+                ),
             });
         }
 
-        let active = &self.defaults.active;
-        let active_backend = self.backends.iter().find(|b| &b.name == active);
+        let active = &profile.defaults.active;
+        let active_backend = profile.backends.iter().find(|b| &b.name == active);
 
         match active_backend {
             None => {
                 return Err(ConfigError::ValidationError {
                     message: format!(
-                        "Active backend '{}' not found in configured backends",
+                        "[{}] Active backend '{}' not found in configured backends",
+                        mode.profile_key(),
                         active
                     ),
                 });
@@ -121,7 +130,8 @@ impl Config {
                 if !backend.is_configured() {
                     return Err(ConfigError::ValidationError {
                         message: format!(
-                            "Active backend '{}' is not configured - set api_key in config",
+                            "[{}] Active backend '{}' is not configured — set api_key in config",
+                            mode.profile_key(),
                             backend.name
                         ),
                     });
@@ -129,20 +139,22 @@ impl Config {
             }
         }
 
-        if let Some(ref at) = self.agents {
-            if !self.backends.iter().any(|b| b.name == at.teammate_backend) {
+        if let Some(ref at) = profile.agents {
+            if !profile.backends.iter().any(|b| b.name == at.teammate_backend) {
                 return Err(ConfigError::ValidationError {
                     message: format!(
-                        "agents.teammate_backend '{}' not found in configured backends",
+                        "[{}] agents.teammate_backend '{}' not found in configured backends",
+                        mode.profile_key(),
                         at.teammate_backend
                     ),
                 });
             }
             if let Some(ref sb) = at.subagent_backend {
-                if !self.backends.iter().any(|b| b.name == *sb) {
+                if !profile.backends.iter().any(|b| b.name == *sb) {
                     return Err(ConfigError::ValidationError {
                         message: format!(
-                            "agents.subagent_backend '{}' not found in configured backends",
+                            "[{}] agents.subagent_backend '{}' not found in configured backends",
+                            mode.profile_key(),
                             sb
                         ),
                     });
@@ -153,21 +165,18 @@ impl Config {
         Ok(())
     }
 
-    /// Log the status of all backends at startup.
-    ///
-    /// Logs warnings for unconfigured backends and info for configured ones.
-    /// Never logs actual API key values.
+    /// Backward-compat validation (validates the Claude profile).
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        self.validate_for(CliMode::Claude)
+    }
+
     pub fn log_backend_status(&self) {
-        for backend in &self.backends {
+        for backend in &self.claude.backends {
             match backend.resolve_credential() {
                 CredentialStatus::Unconfigured { reason } => {
-                    eprintln!(
-                        "Warning: Backend '{}' is unconfigured - {}",
-                        backend.name, reason
-                    );
+                    eprintln!("Warning: Backend '{}' is unconfigured - {}", backend.name, reason);
                 }
                 CredentialStatus::Configured(_) => {
-                    // Don't log key value - just confirmation
                     eprintln!("Backend '{}' configured", backend.name);
                 }
                 CredentialStatus::NoAuth => {
@@ -177,23 +186,78 @@ impl Config {
         }
     }
 
-    /// Get only backends that are configured (have valid credentials or don't need them).
     pub fn configured_backends(&self) -> Vec<&Backend> {
-        self.backends.iter().filter(|b| b.is_configured()).collect()
+        self.claude.backends.iter().filter(|b| b.is_configured()).collect()
     }
 
-    /// Get the currently active backend, if configured.
     pub fn active_backend(&self) -> Option<&Backend> {
-        self.backends
+        self.claude
+            .backends
             .iter()
-            .find(|b| b.name == self.defaults.active && b.is_configured())
+            .find(|b| b.name == self.claude.defaults.active && b.is_configured())
     }
 }
 
-/// Save a full Config to the given path.
+/// Migrate old flat config format to new dual-profile format.
 ///
-/// Creates the parent directory if it doesn't exist.
-/// Uses an exclusive file lock to prevent concurrent writes.
+/// Old format has root-level `[defaults]` and `[[backends]]`.
+/// New format has `[claude.defaults]` and `[[claude.backends]]`.
+fn migrate_config_content(content: &str) -> String {
+    let mut value: toml::Value = match toml::from_str(content) {
+        Ok(v) => v,
+        Err(_) => return content.to_string(),
+    };
+
+    if !migrate_toml_value(&mut value) {
+        return content.to_string();
+    }
+
+    toml::to_string_pretty(&value).unwrap_or_else(|_| content.to_string())
+}
+
+/// Returns true if migration was performed.
+fn migrate_toml_value(value: &mut toml::Value) -> bool {
+    let table = match value.as_table_mut() {
+        Some(t) => t,
+        None => return false,
+    };
+
+    // Already in new format if 'claude' section exists
+    if table.contains_key("claude") {
+        return false;
+    }
+
+    // Old format has root-level 'backends' or 'defaults'
+    let has_backends = table.contains_key("backends");
+    let has_defaults = table.contains_key("defaults");
+    if !has_backends && !has_defaults {
+        return false;
+    }
+
+    let backends = table.remove("backends");
+    let defaults = table.remove("defaults");
+    let agents = table.remove("agents");
+    let claude_settings = table.remove("claude_settings");
+
+    let mut claude_table = toml::value::Table::new();
+    if let Some(d) = defaults {
+        claude_table.insert("defaults".to_string(), d);
+    }
+    if let Some(b) = backends {
+        claude_table.insert("backends".to_string(), b);
+    }
+    if let Some(a) = agents {
+        claude_table.insert("agents".to_string(), a);
+    }
+    if let Some(cs) = claude_settings {
+        claude_table.insert("claude_settings".to_string(), cs);
+    }
+
+    table.insert("claude".to_string(), toml::Value::Table(claude_table));
+    true
+}
+
+/// Save a full Config to the given path.
 pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| ConfigError::ReadError {
@@ -232,16 +296,11 @@ pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
     Ok(())
 }
 
-/// Save claude_settings section to the config file.
-///
-/// Loads the existing Config, updates the `claude_settings` field,
-/// and writes the full config back. If the file doesn't exist,
-/// starts from defaults.
+/// Save claude_settings for the Claude profile.
 pub fn save_claude_settings(
     path: &Path,
     settings: &HashMap<String, bool>,
 ) -> Result<(), ConfigError> {
-    // Ensure parent directory exists before opening
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| ConfigError::ReadError {
             path: path.to_path_buf(),
@@ -249,9 +308,6 @@ pub fn save_claude_settings(
         })?;
     }
 
-    // Open without truncate so we can acquire the lock BEFORE reading.
-    // Truncate + write happens after we hold the exclusive lock, preventing
-    // a race where two callers both read stale config and last-writer wins.
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -262,7 +318,6 @@ pub fn save_claude_settings(
             source: e,
         })?;
 
-    // Acquire exclusive lock FIRST, then read — prevents read-modify-write races
     fs2::FileExt::lock_exclusive(&file).map_err(|e| ConfigError::ReadError {
         path: path.to_path_buf(),
         source: e,
@@ -270,7 +325,6 @@ pub fn save_claude_settings(
 
     use std::io::{Read, Seek, SeekFrom, Write};
 
-    // Read current content while holding the lock
     let mut raw = String::new();
     (&file).read_to_string(&mut raw).map_err(|e| ConfigError::ReadError {
         path: path.to_path_buf(),
@@ -280,17 +334,80 @@ pub fn save_claude_settings(
     let mut config: Config = if raw.trim().is_empty() {
         Config::default()
     } else {
-        toml::from_str(&raw).map_err(|e| ConfigError::ValidationError {
+        let migrated = migrate_config_content(&raw);
+        toml::from_str(&migrated).map_err(|e| ConfigError::ValidationError {
             message: format!("Failed to parse config: {}", e),
         })?
     };
-    config.claude_settings = settings.clone();
+    config.claude.claude_settings = settings.clone();
 
     let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::ValidationError {
         message: format!("Failed to serialize config: {}", e),
     })?;
 
-    // Truncate and overwrite while holding the lock
+    (&file).seek(SeekFrom::Start(0)).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    file.set_len(0).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    (&file).write_all(content.as_bytes()).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    Ok(())
+}
+
+/// Save a CliProfile for the given mode back into the config file.
+pub fn save_profile(path: &Path, mode: CliMode, profile: &CliProfile) -> Result<(), ConfigError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| ConfigError::ReadError {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+    }
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)
+        .map_err(|e| ConfigError::ReadError {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+    fs2::FileExt::lock_exclusive(&file).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    let mut raw = String::new();
+    (&file).read_to_string(&mut raw).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    let mut config: Config = if raw.trim().is_empty() {
+        Config::default()
+    } else {
+        let migrated = migrate_config_content(&raw);
+        toml::from_str(&migrated).map_err(|e| ConfigError::ValidationError {
+            message: format!("Failed to parse config: {}", e),
+        })?
+    };
+
+    *config.profile_mut(mode) = profile.clone();
+
+    let content = toml::to_string_pretty(&config).map_err(|e| ConfigError::ValidationError {
+        message: format!("Failed to serialize config: {}", e),
+    })?;
+
     (&file).seek(SeekFrom::Start(0)).map_err(|e| ConfigError::ReadError {
         path: path.to_path_buf(),
         source: e,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build script for anyclaude
+# Build script for anycode
 #
 # Usage:
 #   ./build.sh              - Build release binary
@@ -89,7 +89,7 @@ build_release() {
     stamp_version
     info "Building release binary..."
     cargo build --release
-    info "Build complete: target/release/anyclaude"
+    info "Build complete: target/release/anycode"
 }
 
 # Build tagged release (no dev stamp)
@@ -97,7 +97,7 @@ build_release_tag() {
     info "Version: ${BASE_VERSION} (release)"
     info "Building release binary..."
     cargo build --release
-    info "Build complete: target/release/anyclaude"
+    info "Build complete: target/release/anycode"
 }
 
 # Build debug binary
@@ -105,7 +105,7 @@ build_debug() {
     stamp_version
     info "Building debug binary..."
     cargo build
-    info "Build complete: target/debug/anyclaude"
+    info "Build complete: target/debug/anycode"
 }
 
 # Clean build artifacts
@@ -127,7 +127,7 @@ install_binary() {
     stamp_version
     info "Building and installing..."
     cargo install --path .
-    info "Installed to ~/.cargo/bin/anyclaude"
+    info "Installed to ~/.cargo/bin/anycode"
 }
 
 # Main entry point

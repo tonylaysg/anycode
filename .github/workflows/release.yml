@@ -18,20 +18,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            asset_name: anyclaude-linux-x86_64
+            asset_name: anycode-linux-x86_64
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            asset_name: anyclaude-linux-aarch64
+            asset_name: anycode-linux-aarch64
             cross: true
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            asset_name: anyclaude-macos-x86_64
+            asset_name: anycode-macos-x86_64
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            asset_name: anyclaude-macos-aarch64
+            asset_name: anycode-macos-aarch64
 
     steps:
       - uses: actions/checkout@v4
@@ -100,8 +100,8 @@ jobs:
           name: ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.notes }}
           files: |
-            artifacts/anyclaude-linux-x86_64
-            artifacts/anyclaude-linux-aarch64
-            artifacts/anyclaude-macos-x86_64
-            artifacts/anyclaude-macos-aarch64
+            artifacts/anycode-linux-x86_64
+            artifacts/anycode-linux-aarch64
+            artifacts/anycode-macos-x86_64
+            artifacts/anycode-macos-aarch64
           fail_on_unmatched_files: false

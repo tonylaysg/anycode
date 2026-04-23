@@ -59,8 +59,8 @@ pub struct ConfigDto {
 
 fn config_to_dto(config: &Config) -> ConfigDto {
     ConfigDto {
-        defaults: config.defaults.clone(),
-        backends: config.backends.iter().map(|b| BackendDto {
+        defaults: config.claude.defaults.clone(),
+        backends: config.claude.backends.iter().map(|b| BackendDto {
             name: b.name.clone(),
             display_name: b.display_name.clone(),
             base_url: b.base_url.clone(),
@@ -74,7 +74,7 @@ fn config_to_dto(config: &Config) -> ConfigDto {
             model_haiku: b.model_haiku.clone(),
             pricing: b.pricing.clone(),
         }).collect(),
-        agents: config.agents.clone(),
+        agents: config.claude.agents.clone(),
     }
 }
 
@@ -124,22 +124,17 @@ pub async fn put_config(
 
     // Rebuild backends, preserving existing api_keys when not provided.
     let backends: Vec<crate::config::Backend> = dto.backends.iter().map(|d| {
-        let old_key = existing.backends.iter()
+        let old_key = existing.claude.backends.iter()
             .find(|b| b.name == d.name)
             .and_then(|b| b.api_key.clone());
         dto_to_backend(d, old_key)
     }).collect();
 
-    let new_config = Config {
-        defaults: dto.defaults,
-        proxy: existing.proxy.clone(),
-        webui: existing.webui.clone(),
-        terminal: existing.terminal.clone(),
-        debug_logging: existing.debug_logging.clone(),
-        claude_settings: existing.claude_settings.clone(),
-        backends,
-        agents: dto.agents,
-    };
+    let mut new_config = existing.clone();
+    new_config.claude.defaults = dto.defaults;
+    new_config.claude.claude_settings = existing.claude.claude_settings.clone();
+    new_config.claude.backends = backends;
+    new_config.claude.agents = dto.agents;
 
     if let Err(e) = new_config.validate() {
         return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
@@ -154,7 +149,7 @@ pub async fn put_config(
     let _ = state.config_store.reload();
 
     // Hot-update BackendState so active routing reflects the new config.
-    if let Err(e) = state.backend_state.update_config(new_config.clone()) {
+    if let Err(e) = state.backend_state.update_config(new_config.claude.clone()) {
         return (StatusCode::INTERNAL_SERVER_ERROR, format!("Config saved but runtime update failed: {e}")).into_response();
     }
 
@@ -185,7 +180,7 @@ pub async fn get_backend(
     Path(name): Path<String>,
 ) -> Response {
     let config = state.config_store.get();
-    match config.backends.iter().find(|b| b.name == name) {
+    match config.claude.backends.iter().find(|b| b.name == name) {
         Some(b) => {
             let dto = BackendDto {
                 name: b.name.clone(),

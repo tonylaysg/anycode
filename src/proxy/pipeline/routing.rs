@@ -4,7 +4,7 @@
 //! - Backend override from extensions (teammate pipeline)
 //! - Plugin routing decisions
 //! - AC marker in request body (session affinity from hook)
-//! - Marker model prefixes (marker-*, anyclaude-*)
+//! - Marker model prefixes (marker-*, anycode-*)
 //! - Active backend from backend_state
 
 use serde_json::Value;
@@ -21,7 +21,7 @@ use crate::proxy::pipeline::PipelineContext;
 /// 1. Plugin backend override (from observability.start_request)
 /// 2. Explicit backend_override parameter (teammate routes)
 /// 3. AC marker in request body (session affinity from hook)
-/// 4. Marker model detection (marker-*, anyclaude-* prefixes, direct backend name)
+/// 4. Marker model detection (marker-*, anycode-* prefixes, direct backend name)
 /// 5. Active backend from backend_state
 pub fn resolve_backend(
     backend_state: &BackendState,
@@ -155,8 +155,8 @@ fn detect_marker_model(
     backend_state: &BackendState,
 ) -> Option<String> {
     // Define marker patterns and their target backends
-    // Format: "marker-{backend_name}" or "anyclaude-{backend_name}"
-    let marker_prefixes = ["marker-", "anyclaude-"];
+    // Format: "marker-{backend_name}" or "anycode-{backend_name}"
+    let marker_prefixes = ["marker-", "anycode-"];
 
     for prefix in &marker_prefixes {
         if let Some(rest) = model.strip_prefix(prefix) {

@@ -7,7 +7,7 @@ unused_imports = "deny"
 unreachable_code = "deny"
 
 [package]
-name = "anyclaude"
+name = "anycode"
 version = "0.5.1"
 edition = "2021"
 

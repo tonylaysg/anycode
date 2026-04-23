@@ -1,10 +1,25 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::cli_mode::CliMode;
+
+/// Per-CLI profile: backends, defaults, agents, and settings for one CLI tool.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CliProfile {
+    #[serde(default)]
+    pub defaults: Defaults,
+    #[serde(default)]
+    pub backends: Vec<Backend>,
+    #[serde(default)]
+    pub agents: Option<AgentsConfig>,
+    /// Claude Code settings (toggle-based, persisted as string→bool map).
+    #[serde(default)]
+    pub claude_settings: HashMap<String, bool>,
+}
+
 /// Root configuration container.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub defaults: Defaults,
     #[serde(default)]
     pub proxy: ProxyConfig,
     #[serde(default)]
@@ -13,13 +28,30 @@ pub struct Config {
     pub terminal: TerminalConfig,
     #[serde(default)]
     pub debug_logging: DebugLoggingConfig,
-    /// Claude Code settings (toggle-based, persisted as string→bool map).
+    /// Claude Code profile.
     #[serde(default)]
-    pub claude_settings: HashMap<String, bool>,
-    pub backends: Vec<Backend>,
-    /// Agents routing configuration.
+    pub claude: CliProfile,
+    /// Copilot CLI profile.
     #[serde(default)]
-    pub agents: Option<AgentsConfig>,
+    pub copilot: CliProfile,
+}
+
+impl Config {
+    /// Return the active profile for the given CLI mode.
+    pub fn profile(&self, mode: CliMode) -> &CliProfile {
+        match mode {
+            CliMode::Claude => &self.claude,
+            CliMode::Copilot => &self.copilot,
+        }
+    }
+
+    /// Return the active profile mutably.
+    pub fn profile_mut(&mut self, mode: CliMode) -> &mut CliProfile {
+        match mode {
+            CliMode::Claude => &mut self.claude,
+            CliMode::Copilot => &mut self.copilot,
+        }
+    }
 }
 
 /// Default settings for the application.
@@ -196,7 +228,7 @@ fn default_scrollback_lines() -> usize {
 }
 
 fn default_debug_log_file_path() -> String {
-    "~/.config/anyclaude/logs/debug.log".to_string()
+    "~/.config/anycode/logs/debug.log".to_string()
 }
 
 fn default_debug_body_preview_bytes() -> usize {
@@ -323,14 +355,17 @@ impl Default for Defaults {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            defaults: Defaults::default(),
             proxy: ProxyConfig::default(),
             webui: WebuiConfig::default(),
             terminal: TerminalConfig::default(),
             debug_logging: DebugLoggingConfig::default(),
-            claude_settings: HashMap::new(),
-            backends: vec![Backend::default()],
-            agents: None,
+            claude: CliProfile {
+                defaults: Defaults::default(),
+                backends: vec![Backend::default()],
+                agents: None,
+                claude_settings: HashMap::new(),
+            },
+            copilot: CliProfile::default(),
         }
     }
 }

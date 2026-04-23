@@ -36,7 +36,7 @@ SHIM_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_ENABLED=__LOG_ENABLED__
 LOG="$SHIM_DIR/tmux_shim.log"
 # Persistent log survives TempDir cleanup
-PLOG="$HOME/.config/anyclaude/logs/tmux_shim.__SESSION_ID__.log"
+PLOG="$HOME/.config/anycode/logs/tmux_shim.__SESSION_ID__.log"
 mkdir -p "$(dirname "$PLOG")" 2>/dev/null
 
 slog() {
@@ -61,7 +61,7 @@ extract_agent_id() {
 REAL_TMUX="$(find_real_tmux)"
 if [ -z "$REAL_TMUX" ]; then
   slog "ERROR: real tmux not found"
-  echo "tmux: command not found (anyclaude shim)" >&2
+  echo "tmux: command not found (anycode shim)" >&2
   exit 127
 fi
 

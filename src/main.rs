@@ -3,12 +3,12 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 
-use anyclaude::config::{Config, save_config};
+use anycode::config::{Config, save_config};
 
 // ── CLI 结构 ──────────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
-#[command(name = "anyclaude", version)]
+#[command(name = "anycode", version)]
 #[command(about = "TUI wrapper for Claude Code with multi-backend support")]
 #[command(args_conflicts_with_subcommands = true)]
 struct Cli {
@@ -33,7 +33,7 @@ struct RunArgs {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show running status of anyclaude
+    /// Show running status of anycode
     Status,
 
     /// View debug logs
@@ -46,12 +46,12 @@ enum Commands {
         follow: bool,
     },
 
-    /// Stop a running anyclaude instance
+    /// Stop a running anycode instance
     Stop,
 
-    /// Uninstall anyclaude
+    /// Uninstall anycode
     Uninstall {
-        /// Also remove configuration directory (~/.config/anyclaude/)
+        /// Also remove configuration directory (~/.config/anycode/)
         #[arg(long)]
         purge: bool,
         /// Skip confirmation prompt
@@ -95,7 +95,7 @@ enum Commands {
 fn webui_pid_file_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".config/anyclaude/webui.pid")
+        .join(".config/anycode/webui.pid")
 }
 
 fn read_webui_pid() -> Option<u32> {
@@ -118,7 +118,7 @@ fn is_process_running(pid: u32) -> bool {
 fn pid_file_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".config/anyclaude/anyclaude.pid")
+        .join(".config/anycode/anycode.pid")
 }
 
 fn read_pid() -> Option<u32> {
@@ -127,14 +127,14 @@ fn read_pid() -> Option<u32> {
         .and_then(|s| s.trim().parse().ok())
 }
 
-/// Returns true only when PID exists AND its /proc/PID/comm is "anyclaude".
+/// Returns true only when PID exists AND its /proc/PID/comm is "anycode".
 /// This prevents false-positives when the OS reuses a stale PID.
-fn is_anyclaude_running(pid: u32) -> bool {
+fn is_anycode_running(pid: u32) -> bool {
     // Primary: check /proc/<pid>/comm (Linux-only, fast)
     #[cfg(target_os = "linux")]
     {
         if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
-            return comm.trim() == "anyclaude";
+            return comm.trim() == "anycode";
         }
         return false;
     }
@@ -158,18 +158,18 @@ impl Drop for PidGuard {
 fn cmd_status() -> io::Result<()> {
     // ── 主进程 (TUI + 代理) ──────────────────────────────────────────────────
     match read_pid() {
-        Some(pid) if is_anyclaude_running(pid) => {
-            println!("● anyclaude 主进程  正在运行  (PID: {})", pid);
+        Some(pid) if is_anycode_running(pid) => {
+            println!("● anycode 主进程  正在运行  (PID: {})", pid);
             if let Ok(cfg) = Config::load() {
                 println!("  代理地址:  http://{}", cfg.proxy.bind_addr);
             }
         }
         Some(_) => {
-            println!("○ anyclaude 主进程  未运行（清理过期 PID）");
+            println!("○ anycode 主进程  未运行（清理过期 PID）");
             let _ = std::fs::remove_file(pid_file_path());
         }
         None => {
-            println!("○ anyclaude 主进程  未运行");
+            println!("○ anycode 主进程  未运行");
         }
     }
 
@@ -189,7 +189,7 @@ fn cmd_status() -> io::Result<()> {
             let _ = std::fs::remove_file(webui_pid_file_path());
         }
         None => {
-            println!("○ WebUI 守护进程  未运行  (使用 'anyclaude webui --daemon' 启动)");
+            println!("○ WebUI 守护进程  未运行  (使用 'anycode webui --daemon' 启动)");
         }
     }
     Ok(())
@@ -199,7 +199,7 @@ fn cmd_logs(lines: usize, follow: bool) -> io::Result<()> {
     let raw_path = Config::load()
         .ok()
         .map(|c| c.debug_logging.file_path.clone())
-        .unwrap_or_else(|| "~/.config/anyclaude/logs/debug.log".to_string());
+        .unwrap_or_else(|| "~/.config/anycode/logs/debug.log".to_string());
 
     let log_path = if raw_path.starts_with("~/") {
         dirs::home_dir()
@@ -230,21 +230,21 @@ fn cmd_logs(lines: usize, follow: bool) -> io::Result<()> {
 
 fn cmd_stop() -> io::Result<()> {
     match read_pid() {
-        Some(pid) if is_anyclaude_running(pid) => {
+        Some(pid) if is_anycode_running(pid) => {
             let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
             if ret == 0 {
-                println!("已向 anyclaude (PID: {}) 发送停止信号", pid);
+                println!("已向 anycode (PID: {}) 发送停止信号", pid);
             } else {
                 eprintln!("发送停止信号失败，请手动执行: kill {}", pid);
                 std::process::exit(1);
             }
         }
         Some(_) => {
-            println!("anyclaude 未运行，清理过期 PID 文件");
+            println!("anycode 未运行，清理过期 PID 文件");
             let _ = std::fs::remove_file(pid_file_path());
         }
         None => {
-            println!("anyclaude 未运行");
+            println!("anycode 未运行");
         }
     }
     Ok(())
@@ -253,7 +253,7 @@ fn cmd_stop() -> io::Result<()> {
 fn cmd_reset(yes: bool) -> io::Result<()> {
     if !yes {
         println!("此命令将清理 AnyClaude 注入到 Claude Code 的残留状态：");
-        println!("  - 停止运行中的 anyclaude 实例");
+        println!("  - 停止运行中的 anycode 实例");
         println!("  - 清理 ~/.claude/session-env/ 缓存的环境变量");
         println!("  - 清理 ~/.claude/sessions/ 中的会话记录");
         println!();
@@ -268,12 +268,12 @@ fn cmd_reset(yes: bool) -> io::Result<()> {
         }
     }
 
-    // 停止运行中的 anyclaude 实例
+    // 停止运行中的 anycode 实例
     if let Some(pid) = read_pid() {
-        if is_anyclaude_running(pid) {
+        if is_anycode_running(pid) {
             let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
             if ret == 0 {
-                println!("✓ 已停止 anyclaude (PID: {})", pid);
+                println!("✓ 已停止 anycode (PID: {})", pid);
                 let _ = std::fs::remove_file(pid_file_path());
             }
         }
@@ -282,7 +282,7 @@ fn cmd_reset(yes: bool) -> io::Result<()> {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
     let claude_dir = home.join(".claude");
 
-    // 清理 session-env（anyclaude 注入的 ANTHROPIC_BASE_URL 等可能被 Claude Code 缓存于此）
+    // 清理 session-env（anycode 注入的 ANTHROPIC_BASE_URL 等可能被 Claude Code 缓存于此）
     let session_env_dir = claude_dir.join("session-env");
     if session_env_dir.exists() {
         match std::fs::remove_dir_all(&session_env_dir) {
@@ -293,7 +293,7 @@ fn cmd_reset(yes: bool) -> io::Result<()> {
         println!("  ~/.claude/session-env/ 不存在，跳过");
     }
 
-    // 清理 sessions（旧会话可能携带 anyclaude-proxy 凭证缓存）
+    // 清理 sessions（旧会话可能携带 anycode-proxy 凭证缓存）
     let sessions_dir = claude_dir.join("sessions");
     if sessions_dir.exists() {
         match std::fs::remove_dir_all(&sessions_dir) {
@@ -305,14 +305,14 @@ fn cmd_reset(yes: bool) -> io::Result<()> {
     }
 
     println!();
-    println!("重置完成。请重新运行 anyclaude，Claude Code 将重新进行登录认证。");
+    println!("重置完成。请重新运行 anycode，Claude Code 将重新进行登录认证。");
     Ok(())
 }
 
 fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     if !yes {
         let suffix = if purge { "（含配置文件）" } else { "" };
-        print!("确认卸载 anyclaude{}？[y/N]: ", suffix);
+        print!("确认卸载 anycode{}？[y/N]: ", suffix);
         io::stdout().flush()?;
         let mut buf = [0u8; 4];
         let n = io::stdin().read(&mut buf).unwrap_or(0);
@@ -337,14 +337,14 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     if purge {
         let config_dir = dirs::home_dir()
             .unwrap_or_default()
-            .join(".config/anyclaude");
+            .join(".config/anycode");
         if config_dir.exists() {
             std::fs::remove_dir_all(&config_dir)?;
             println!("✓ 已删除配置目录: {}", config_dir.display());
         }
     } else {
-        println!("  配置已保留: ~/.config/anyclaude/");
-        println!("  完全删除请运行: anyclaude uninstall --purge");
+        println!("  配置已保留: ~/.config/anycode/");
+        println!("  完全删除请运行: anycode uninstall --purge");
     }
 
     println!("卸载完成");
@@ -426,7 +426,7 @@ fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
         println!("WebUI 已在后台启动 (PID {})", pid);
         println!("地址: http://{}{}", bind_addr, auth_note);
         println!("日志: {}", log_path.display());
-        println!("停止: anyclaude webui --stop  或  kill {}", pid);
+        println!("停止: anycode webui --stop  或  kill {}", pid);
         return Ok(());
     }
 
@@ -438,10 +438,10 @@ fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
     };
 
     let config_path = Config::config_path();
-    let config_store = anyclaude::config::ConfigStore::new(config.clone(), config_path);
-    let backend_state = anyclaude::backend::BackendState::from_config(config)
+    let config_store = anycode::config::ConfigStore::new(config.clone(), config_path);
+    let backend_state = anycode::backend::BackendState::from_config(config.claude.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-    let webui_state = anyclaude::proxy::webui::WebuiState {
+    let webui_state = anycode::proxy::webui::WebuiState {
         config_store,
         backend_state,
     };
@@ -451,11 +451,11 @@ fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
         .build()?;
 
     rt.block_on(async move {
-        match anyclaude::proxy::webui::bind_webui(&bind_addr).await {
+        match anycode::proxy::webui::bind_webui(&bind_addr).await {
             Ok((addr, listener)) => {
                 println!("WebUI 已启动: http://{}{}", addr, auth_note);
                 println!("按 Ctrl+C 停止");
-                if let Err(e) = anyclaude::proxy::webui::serve_webui(listener, webui_state, username, password).await {
+                if let Err(e) = anycode::proxy::webui::serve_webui(listener, webui_state, username, password).await {
                     eprintln!("WebUI 错误: {}", e);
                 }
             }
@@ -505,10 +505,10 @@ fn cmd_bind(mode: &str) -> io::Result<()> {
     if bind_addr.starts_with("0.0.0.0") && config.webui.password.is_none() {
         println!();
         println!("警告: 已开放外部访问，但未设置登录密码！");
-        println!("建议运行: anyclaude passwd");
+        println!("建议运行: anycode passwd");
     }
     println!();
-    println!("重启 WebUI 后生效: anyclaude webui");
+    println!("重启 WebUI 后生效: anycode webui");
     Ok(())
 }
 
@@ -556,7 +556,7 @@ fn cmd_passwd() -> io::Result<()> {
     } else {
         println!("✓ 已清除密码，WebUI 无需登录即可访问");
     }
-    println!("重启 WebUI 后生效: anyclaude webui");
+    println!("重启 WebUI 后生效: anycode webui");
     Ok(())
 }
 
@@ -657,10 +657,10 @@ fn run_main(run: RunArgs) -> io::Result<()> {
     };
 
     if let Some(ref backend_name) = run.backend {
-        let exists = config.backends.iter().any(|b| &b.name == backend_name);
+        let exists = config.claude.backends.iter().any(|b| &b.name == backend_name);
         if !exists {
             let _ = disable_raw_mode();
-            let available: Vec<_> = config.backends.iter().map(|b| b.name.as_str()).collect();
+            let available: Vec<_> = config.claude.backends.iter().map(|b| b.name.as_str()).collect();
             eprintln!("Error: Backend '{}' not found in config", backend_name);
             if available.is_empty() {
                 eprintln!("No backends configured");
@@ -671,7 +671,7 @@ fn run_main(run: RunArgs) -> io::Result<()> {
         }
     }
 
-    // Write PID file so `anyclaude status` / `stop` can find this process.
+    // Write PID file so `anycode status` / `stop` can find this process.
     let pid_path = pid_file_path();
     if let Some(parent) = pid_path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -679,5 +679,5 @@ fn run_main(run: RunArgs) -> io::Result<()> {
     let _ = std::fs::write(&pid_path, std::process::id().to_string());
     let _pid_guard = PidGuard(pid_path); // auto-deleted on exit
 
-    anyclaude::ui::run(run.backend, run.args)
+    anycode::ui::run(run.backend, run.args)
 }

@@ -37,16 +37,16 @@ impl ProxyServer {
         session_token: Option<String>,
     ) -> Result<Self, crate::backend::BackendError> {
         let cfg = config.get();
-        let timeout_config = TimeoutConfig::from(&cfg.defaults);
-        let pool_config = PoolConfig::from(&cfg.defaults);
-        let backend_state = BackendState::from_config(cfg.clone())?;
+        let timeout_config = TimeoutConfig::from(&cfg.claude.defaults);
+        let pool_config = PoolConfig::from(&cfg.claude.defaults);
+        let backend_state = BackendState::from_config(cfg.claude.clone())?;
 
         // Initialize agent backend states from config
-        let subagent_initial = cfg.agents
+        let subagent_initial = cfg.claude.agents
             .as_ref()
             .and_then(|at| at.subagent_backend.clone());
         let subagent_backend = AgentBackendState::new(subagent_initial);
-        let teammate_initial = cfg.agents
+        let teammate_initial = cfg.claude.agents
             .as_ref()
             .map(|at| at.teammate_backend.clone());
         let teammate_backend = AgentBackendState::new(teammate_initial);

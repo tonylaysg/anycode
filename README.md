@@ -28,7 +28,7 @@ TUI wrapper for Claude Code with hot-swappable API backend support.
 **One-line install (recommended):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tonylaysg/anyclaude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tonylaysg/anycode/main/install.sh | bash
 ```
 
 The installer will:
@@ -46,24 +46,24 @@ cargo install --path .
 
 ### Quick Start
 
-1. Run `anyclaude` — this starts the TUI with Claude Code embedded
+1. Run `anycode` — this starts the TUI with Claude Code embedded
 2. Configure backends via WebUI at `http://127.0.0.1:47191`
 3. Press `Ctrl+B` to switch backends at any time
 
 ### Commands
 
 ```
-anyclaude                          Start TUI (default backend)
-anyclaude --backend <name>        Start with specific backend
-anyclaude status                  Show running instance status
-anyclaude logs [-n 50] [-f]      View or follow debug logs
-anyclaude stop                    Stop running instance
-anyclaude webui                   Start WebUI configuration server
-anyclaude webui --daemon          Start WebUI in background
-anyclaude bind [local|lan|public] Change WebUI access mode
-anyclaude passwd                  Set WebUI login credentials
-anyclaude uninstall               Uninstall (keeps config)
-anyclaude uninstall --purge       Uninstall and remove all config
+anycode                          Start TUI (default backend)
+anycode --backend <name>        Start with specific backend
+anycode status                  Show running instance status
+anycode logs [-n 50] [-f]      View or follow debug logs
+anycode stop                    Stop running instance
+anycode webui                   Start WebUI configuration server
+anycode webui --daemon          Start WebUI in background
+anycode bind [local|lan|public] Change WebUI access mode
+anycode passwd                  Set WebUI login credentials
+anycode uninstall               Uninstall (keeps config)
+anycode uninstall --purge       Uninstall and remove all config
 ```
 
 ### Hotkeys
@@ -79,7 +79,7 @@ anyclaude uninstall --purge       Uninstall and remove all config
 
 ### Configuration
 
-Config file: `~/.config/anyclaude/config.toml`
+Config file: `~/.config/anycode/config.toml`
 
 **Minimal:**
 
@@ -125,7 +125,7 @@ scrollback_lines = 10000
 [debug_logging]
 level       = "verbose"   # off | basic | verbose | full
 destination = "file"      # stderr | file | both
-file_path   = "~/.config/anyclaude/logs/debug.log"
+file_path   = "~/.config/anycode/logs/debug.log"
 format      = "console"   # console | json
 
 [[backends]]
@@ -230,7 +230,7 @@ Claude Code 的 TUI 包装器，支持一键热切换 API 后端。
 **一键安装（推荐）：**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tonylaysg/anyclaude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tonylaysg/anycode/main/install.sh | bash
 ```
 
 安装程序会自动：
@@ -248,24 +248,24 @@ cargo install --path .
 
 ### 快速上手
 
-1. 运行 `anyclaude` — 启动 TUI，内嵌 Claude Code
+1. 运行 `anycode` — 启动 TUI，内嵌 Claude Code
 2. 访问 `http://127.0.0.1:47191` 通过 WebUI 配置后端
 3. 随时按 `Ctrl+B` 切换后端
 
 ### 命令
 
 ```
-anyclaude                          启动 TUI（使用默认后端）
-anyclaude --backend <名称>        指定初始后端启动
-anyclaude status                  查看运行状态
-anyclaude logs [-n 50] [-f]      查看 / 实时追踪日志
-anyclaude stop                    停止运行中的实例
-anyclaude webui                   启动 WebUI 配置服务
-anyclaude webui --daemon          后台模式启动 WebUI
-anyclaude bind [local|lan|public] 更改 WebUI 访问模式
-anyclaude passwd                  设置 WebUI 登录密码
-anyclaude uninstall               卸载（保留配置文件）
-anyclaude uninstall --purge       完全卸载（含配置文件）
+anycode                          启动 TUI（使用默认后端）
+anycode --backend <名称>        指定初始后端启动
+anycode status                  查看运行状态
+anycode logs [-n 50] [-f]      查看 / 实时追踪日志
+anycode stop                    停止运行中的实例
+anycode webui                   启动 WebUI 配置服务
+anycode webui --daemon          后台模式启动 WebUI
+anycode bind [local|lan|public] 更改 WebUI 访问模式
+anycode passwd                  设置 WebUI 登录密码
+anycode uninstall               卸载（保留配置文件）
+anycode uninstall --purge       完全卸载（含配置文件）
 ```
 
 ### 快捷键
@@ -281,7 +281,7 @@ anyclaude uninstall --purge       完全卸载（含配置文件）
 
 ### 配置
 
-配置文件位置：`~/.config/anyclaude/config.toml`
+配置文件位置：`~/.config/anycode/config.toml`
 
 **最简配置：**
 
@@ -327,7 +327,7 @@ scrollback_lines = 10000
 [debug_logging]
 level       = "verbose"   # off | basic | verbose | full
 destination = "file"      # stderr | file | both
-file_path   = "~/.config/anyclaude/logs/debug.log"
+file_path   = "~/.config/anycode/logs/debug.log"
 format      = "console"   # console | json
 
 [[backends]]
