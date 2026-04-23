@@ -3,7 +3,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 
-use anyclaude::config::Config;
+use anyclaude::config::{Config, save_config};
 
 // ── CLI 结构 ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,16 @@ enum Commands {
         #[arg(long, value_name = "ADDR")]
         bind: Option<String>,
     },
+
+    /// Change WebUI access mode (local / lan / public / custom address)
+    Bind {
+        /// Access mode: local, lan, public, or a custom address like 0.0.0.0:8080
+        #[arg(value_name = "MODE|ADDR")]
+        mode: String,
+    },
+
+    /// Set or reset WebUI login credentials
+    Passwd,
 }
 
 // ── PID 文件工具 ──────────────────────────────────────────────────────────────
@@ -282,6 +292,142 @@ fn cmd_webui(bind_override: Option<String>) -> io::Result<()> {
     Ok(())
 }
 
+fn load_config_or_exit() -> Config {
+    match Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: Failed to load config: {}", e);
+            eprintln!("Config file: {}", Config::config_path().display());
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_bind(mode: &str) -> io::Result<()> {
+    let bind_addr = match mode {
+        "local" | "localhost" => "127.0.0.1:47191".to_string(),
+        "lan" | "public" => "0.0.0.0:47191".to_string(),
+        addr if addr.contains(':') => addr.to_string(),
+        _ => {
+            eprintln!("Error: 无效模式 '{}'", mode);
+            eprintln!("可选值: local / lan / public / 自定义地址(如 0.0.0.0:9000)");
+            std::process::exit(1);
+        }
+    };
+
+    let mut config = load_config_or_exit();
+    let old = config.webui.bind_addr.clone();
+    config.webui.bind_addr = bind_addr.clone();
+
+    save_config(&Config::config_path(), &config)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    println!("WebUI 绑定地址已更新");
+    println!("  旧: {}", old);
+    println!("  新: {}", bind_addr);
+    if bind_addr.starts_with("0.0.0.0") && config.webui.password.is_none() {
+        println!();
+        println!("警告: 已开放外部访问，但未设置登录密码！");
+        println!("建议运行: anyclaude passwd");
+    }
+    println!();
+    println!("重启 WebUI 后生效: anyclaude webui");
+    Ok(())
+}
+
+fn cmd_passwd() -> io::Result<()> {
+    let mut config = load_config_or_exit();
+
+    println!("=== 设置 WebUI 登录账号密码 ===");
+    println!("（直接回车保留现有值，输入 '-' 清除密码启用免登录）");
+    println!();
+
+    // Username
+    let cur_user = config.webui.username.as_deref().unwrap_or("（未设置）");
+    print!("用户名 [当前: {}]: ", cur_user);
+    io::stdout().flush()?;
+    let mut new_user = String::new();
+    io::stdin().read_line(&mut new_user)?;
+    let new_user = new_user.trim();
+
+    // Password
+    let new_pass = read_secret("密码 [回车保留 / 输入 '-' 清除]: ")?;
+
+    // Apply changes
+    match new_user {
+        "" => {}                                          // keep existing
+        "-" => config.webui.username = None,
+        u  => config.webui.username = Some(u.to_string()),
+    }
+    match new_pass.as_str() {
+        "" => {}                                          // keep existing
+        "-" => { config.webui.password = None; config.webui.username = None; }
+        p  => config.webui.password = Some(p.to_string()),
+    }
+
+    // Ensure username is set when password is set
+    if config.webui.password.is_some() && config.webui.username.is_none() {
+        config.webui.username = Some("admin".to_string());
+        println!("用户名未设置，已自动设为 admin");
+    }
+
+    save_config(&Config::config_path(), &config)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    if config.webui.password.is_some() {
+        println!("✓ 登录密码已设置（用户名: {}）", config.webui.username.as_deref().unwrap_or("admin"));
+    } else {
+        println!("✓ 已清除密码，WebUI 无需登录即可访问");
+    }
+    println!("重启 WebUI 后生效: anyclaude webui");
+    Ok(())
+}
+
+/// Read a line from stdin with echo disabled (cross-platform, no external crates).
+fn read_secret(prompt: &str) -> io::Result<String> {
+    print!("{}", prompt);
+    io::stdout().flush()?;
+
+    // Save terminal state, disable echo, read, restore
+    let saved = std::process::Command::new("stty")
+        .arg("-g")
+        .stdin(std::fs::File::open("/dev/tty")?)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    let _ = std::process::Command::new("stty")
+        .arg("-echo")
+        .stdin(std::fs::File::open("/dev/tty")?)
+        .status();
+
+    let mut val = String::new();
+    let result = io::stdin().read_line(&mut val);
+
+    // Restore terminal (always, even on error)
+    if !saved.is_empty() {
+        let _ = std::process::Command::new("stty")
+            .arg(&saved)
+            .stdin(std::fs::File::open("/dev/tty").unwrap_or_else(|_| unsafe {
+                use std::os::unix::io::FromRawFd;
+                std::fs::File::from_raw_fd(0)
+            }))
+            .status();
+    } else {
+        let _ = std::process::Command::new("stty")
+            .arg("echo")
+            .stdin(std::fs::File::open("/dev/tty").unwrap_or_else(|_| unsafe {
+                use std::os::unix::io::FromRawFd;
+                std::fs::File::from_raw_fd(0)
+            }))
+            .status();
+    }
+    println!(); // newline after hidden input
+
+    result?;
+    Ok(val.trim().to_string())
+}
+
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
 fn main() -> io::Result<()> {
@@ -295,6 +441,8 @@ fn main() -> io::Result<()> {
             Commands::Stop => cmd_stop(),
             Commands::Uninstall { purge, yes } => cmd_uninstall(purge, yes),
             Commands::Webui { bind } => cmd_webui(bind),
+            Commands::Bind { mode } => cmd_bind(&mode),
+            Commands::Passwd => cmd_passwd(),
         };
     }
 

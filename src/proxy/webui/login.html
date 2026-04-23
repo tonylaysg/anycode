@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnyClaude — 登录</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 40px 36px;
+    width: 340px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .logo h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #58a6ff;
+    letter-spacing: 0.5px;
+  }
+  .logo p {
+    font-size: 12px;
+    color: #8b949e;
+    margin-top: 4px;
+  }
+  .field {
+    margin-bottom: 16px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 6px;
+  }
+  input[type="text"],
+  input[type="password"] {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    padding: 9px 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus {
+    border-color: #58a6ff;
+  }
+  button[type="submit"] {
+    width: 100%;
+    background: #238636;
+    border: 1px solid #2ea043;
+    border-radius: 6px;
+    color: #fff;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.15s;
+  }
+  button[type="submit"]:hover { background: #2ea043; }
+  .error {
+    background: rgba(248,81,73,0.1);
+    border: 1px solid rgba(248,81,73,0.4);
+    border-radius: 6px;
+    color: #f85149;
+    font-size: 13px;
+    padding: 9px 12px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .error.show { display: block; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>AnyClaude</h1>
+    <p>配置管理界面</p>
+  </div>
+  <div class="error" id="err"></div>
+  <form id="form">
+    <div class="field">
+      <label for="u">用户名</label>
+      <input type="text" id="u" name="username" autocomplete="username" autofocus>
+    </div>
+    <div class="field">
+      <label for="p">密码</label>
+      <input type="password" id="p" name="password" autocomplete="current-password">
+    </div>
+    <button type="submit">登 录</button>
+  </form>
+</div>
+<script>
+document.getElementById('form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.classList.remove('show');
+  const body = new URLSearchParams({
+    username: document.getElementById('u').value,
+    password: document.getElementById('p').value
+  });
+  const res = await fetch('/login', { method: 'POST', body });
+  if (res.ok) {
+    const redir = new URLSearchParams(location.search).get('next') || '/ui/';
+    location.href = redir;
+  } else {
+    err.textContent = '用户名或密码错误';
+    err.classList.add('show');
+    document.getElementById('p').value = '';
+    document.getElementById('p').focus();
+  }
+});
+</script>
+</body>
+</html>

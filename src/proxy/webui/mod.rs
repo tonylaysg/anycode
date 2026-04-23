@@ -5,148 +5,239 @@
 //! the proxy server), so it can be bound to `0.0.0.0` for LAN/remote access
 //! while the proxy stays on `127.0.0.1`.
 //!
-//! Optional Basic Auth is supported via the `[webui] password` config field.
+//! Authentication uses session cookies with a custom HTML login page.
+//! No browser-native Basic Auth dialogs.
 
 mod api;
 
 pub use api::WebuiState;
 
 use axum::body::Body;
-use axum::extract::State;
+use axum::extract::{Form, State};
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
-use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
 use axum::Router;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 
 static INDEX_HTML: &str = include_str!("index.html");
+static LOGIN_HTML: &str = include_str!("login.html");
+
+const SESSION_TTL: Duration = Duration::from_secs(24 * 3600); // 24 hours
+const SESSION_COOKIE: &str = "ac_session";
+
+// ── Session store ─────────────────────────────────────────────────────────────
+
+/// In-memory session store: token → expiry time.
+#[derive(Clone, Default)]
+struct SessionStore(Arc<Mutex<HashMap<String, Instant>>>);
+
+impl SessionStore {
+    fn create(&self) -> String {
+        let token = uuid::Uuid::new_v4().to_string();
+        let expiry = Instant::now() + SESSION_TTL;
+        let mut map = self.0.lock().unwrap();
+        // Purge expired sessions while we have the lock
+        map.retain(|_, exp| *exp > Instant::now());
+        map.insert(token.clone(), expiry);
+        token
+    }
+
+    fn is_valid(&self, token: &str) -> bool {
+        let map = self.0.lock().unwrap();
+        map.get(token).map(|exp| *exp > Instant::now()).unwrap_or(false)
+    }
+
+    fn revoke(&self, token: &str) {
+        self.0.lock().unwrap().remove(token);
+    }
+}
+
+// ── Auth state ────────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct AuthState {
+    /// Expected credentials (username, password). None = auth disabled.
+    credentials: Option<Arc<(String, String)>>,
+    sessions: SessionStore,
+}
+
+/// Constant-time byte comparison — prevents timing attacks on credentials.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let diff = a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y));
+    diff == 0
+}
+
+fn get_cookie(req: &Request<Body>, name: &str) -> Option<String> {
+    req.headers()
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';').find_map(|part| {
+                let part = part.trim();
+                let (k, v) = part.split_once('=')?;
+                if k.trim() == name { Some(v.trim().to_string()) } else { None }
+            })
+        })
+}
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+
+async fn auth_middleware(
+    State(auth): State<AuthState>,
+    req: Request<Body>,
+    next: Next,
+) -> Response {
+    // No credentials configured → pass through
+    let Some(_) = &auth.credentials else {
+        return next.run(req).await;
+    };
+
+    // Login page itself is always accessible
+    let path = req.uri().path();
+    if path == "/login" {
+        return next.run(req).await;
+    }
+
+    // Check session cookie
+    if let Some(token) = get_cookie(&req, SESSION_COOKIE) {
+        if auth.sessions.is_valid(&token) {
+            return next.run(req).await;
+        }
+    }
+
+    // Not authenticated — redirect to login page
+    let redirect_to = format!("/login?next={}", urlencoded(req.uri().path()));
+    Redirect::to(&redirect_to).into_response()
+}
+
+fn urlencoded(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' {
+                vec![c]
+            } else {
+                format!("%{:02X}", c as u32).chars().collect()
+            }
+        })
+        .collect()
+}
+
+#[derive(serde::Deserialize)]
+struct LoginForm {
+    username: String,
+    password: String,
+}
 
 async fn serve_index() -> impl IntoResponse {
     Html(INDEX_HTML)
 }
 
-/// Optional Basic Auth state shared with the auth middleware.
+// ── Combined app state ────────────────────────────────────────────────────────
+
 #[derive(Clone)]
-struct AuthState {
-    /// Pre-encoded `Basic <base64(username:password)>` value, or None when auth disabled.
-    expected: Option<Arc<String>>,
+struct AppState {
+    webui: WebuiState,
+    auth: AuthState,
 }
 
-/// Constant-time byte comparison — prevents timing attacks on auth token.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    // XOR all bytes; non-zero result means mismatch.
-    // Optimizer cannot short-circuit because result is accumulated.
-    let diff = a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y));
-    diff == 0
+// ── Request handlers (all use AppState) ───────────────────────────────────────
+
+async fn handler_login_get() -> impl IntoResponse {
+    Html(LOGIN_HTML)
 }
 
-/// Middleware: enforce Basic Auth when credentials are configured.
-async fn basic_auth_middleware(
-    State(auth): State<AuthState>,
-    req: Request<Body>,
-    next: Next,
+async fn handler_login_post(
+    State(app): State<AppState>,
+    Form(form): Form<LoginForm>,
 ) -> Response {
-    if let Some(ref expected) = auth.expected {
-        let provided = req
-            .headers()
-            .get("Authorization")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-
-        if !constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
-            return Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .header("WWW-Authenticate", r#"Basic realm="AnyClaude WebUI""#)
-                .body(Body::from("Unauthorized"))
-                .unwrap();
-        }
-    }
-    next.run(req).await
-}
-
-/// Encode username+password into `Basic <base64(username:password)>` header value.
-fn encode_basic_auth(username: &str, password: &str) -> String {
-    use std::io::Write;
-    let input = format!("{}:{}", username, password);
-    let mut buf = Vec::new();
-    // base64 encode manually using standard library
-    // We use a simple byte-by-byte approach to avoid adding a dependency
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let bytes = input.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let b0 = bytes[i] as u32;
-        let b1 = if i + 1 < bytes.len() { bytes[i + 1] as u32 } else { 0 };
-        let b2 = if i + 2 < bytes.len() { bytes[i + 2] as u32 } else { 0 };
-        let _ = write!(buf, "{}", TABLE[((b0 >> 2) & 0x3f) as usize] as char);
-        let _ = write!(buf, "{}", TABLE[(((b0 & 3) << 4) | (b1 >> 4)) as usize] as char);
-        if i + 1 < bytes.len() {
-            let _ = write!(buf, "{}", TABLE[(((b1 & 0xf) << 2) | (b2 >> 6)) as usize] as char);
-        } else {
-            buf.push(b'=');
-        }
-        if i + 2 < bytes.len() {
-            let _ = write!(buf, "{}", TABLE[(b2 & 0x3f) as usize] as char);
-        } else {
-            buf.push(b'=');
-        }
-        i += 3;
-    }
-    format!("Basic {}", String::from_utf8(buf).unwrap_or_default())
-}
-
-/// Build the WebUI router (routes only, no server binding).
-fn build_webui_router(state: WebuiState, auth: AuthState) -> Router {
-    Router::new()
-        .route("/ui/", get(serve_index))
-        .route("/api/config", get(api::get_config))
-        .route("/api/config", put(api::put_config))
-        .route("/api/config/active", post(api::post_active_backend))
-        .route("/api/config/backends/{name}", get(api::get_backend))
-        .layer(axum::middleware::from_fn_with_state(auth, basic_auth_middleware))
-        .with_state(state)
-}
-
-/// Start the WebUI HTTP server.
-///
-/// Binds to `bind_addr`, optionally enforces Basic Auth with `username`+`password`.
-/// Returns the actual bound address (useful when port 0 is used).
-/// This function runs until the server exits.
-pub async fn run_webui_server(
-    state: WebuiState,
-    bind_addr: &str,
-    username: Option<&str>,
-    password: Option<&str>,
-) -> Result<std::net::SocketAddr, Box<dyn std::error::Error>> {
-    let auth = AuthState {
-        expected: match (username, password) {
-            (Some(u), Some(p)) => Some(Arc::new(encode_basic_auth(u, p))),
-            _ => None,
-        },
+    let Some(ref creds) = app.auth.credentials else {
+        return Redirect::to("/ui/").into_response();
     };
-
-    let app = build_webui_router(state, auth);
-
-    let listener = TcpListener::bind(bind_addr).await
-        .map_err(|e| format!("WebUI: cannot bind to '{}': {}", bind_addr, e))?;
-
-    let addr = listener.local_addr()?;
-
-    axum::serve(listener, app).await
-        .map_err(|e| format!("WebUI server error: {}", e))?;
-
-    Ok(addr)
+    let (expected_user, expected_pass) = creds.as_ref();
+    let ok = constant_time_eq(form.username.as_bytes(), expected_user.as_bytes())
+          && constant_time_eq(form.password.as_bytes(), expected_pass.as_bytes());
+    if ok {
+        let token = app.auth.sessions.create();
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("Set-Cookie", format!(
+                "{}={}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}",
+                SESSION_COOKIE, token, SESSION_TTL.as_secs()
+            ))
+            .body(Body::empty())
+            .unwrap()
+    } else {
+        Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body(Body::from("Invalid credentials"))
+            .unwrap()
+    }
 }
 
-/// Bind the WebUI listener and return (SocketAddr, TcpListener).
-///
-/// Separated from `serve_webui` so the caller can log the address
-/// before spawning the server task.
+async fn handler_logout(State(app): State<AppState>, req: Request<Body>) -> Response {
+    if let Some(token) = get_cookie(&req, SESSION_COOKIE) {
+        app.auth.sessions.revoke(&token);
+    }
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Set-Cookie", format!(
+            "{}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0", SESSION_COOKIE
+        ))
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn handler_get_config(State(app): State<AppState>) -> Response {
+    api::get_config(State(app.webui)).await.into_response()
+}
+async fn handler_put_config(
+    State(app): State<AppState>,
+    json: axum::Json<api::ConfigDto>,
+) -> Response {
+    api::put_config(State(app.webui), json).await
+}
+async fn handler_post_active(
+    State(app): State<AppState>,
+    json: axum::Json<api::ActiveBackendRequest>,
+) -> Response {
+    api::post_active_backend(State(app.webui), json).await
+}
+async fn handler_get_backend(
+    State(app): State<AppState>,
+    path: axum::extract::Path<String>,
+) -> Response {
+    api::get_backend(State(app.webui), path).await.into_response()
+}
+
+async fn auth_mw(State(app): State<AppState>, req: Request<Body>, next: Next) -> Response {
+    auth_middleware(State(app.auth), req, next).await
+}
+
+// ── Router builder ────────────────────────────────────────────────────────────
+
+fn build_router(app: AppState) -> Router {
+    Router::new()
+        .route("/ui/",                          get(serve_index))
+        .route("/login",                        get(handler_login_get).post(handler_login_post))
+        .route("/logout",                       post(handler_logout))
+        .route("/api/config",                   get(handler_get_config).put(handler_put_config))
+        .route("/api/config/active",            post(handler_post_active))
+        .route("/api/config/backends/{name}",   get(handler_get_backend))
+        .layer(axum::middleware::from_fn_with_state(app.clone(), auth_mw))
+        .with_state(app)
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/// Bind the WebUI listener and return `(SocketAddr, TcpListener)`.
 pub async fn bind_webui(
     bind_addr: &str,
 ) -> Result<(std::net::SocketAddr, TcpListener), Box<dyn std::error::Error>> {
@@ -163,13 +254,14 @@ pub async fn serve_webui(
     username: Option<String>,
     password: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let auth = AuthState {
-        expected: match (username.as_deref(), password.as_deref()) {
-            (Some(u), Some(p)) => Some(Arc::new(encode_basic_auth(u, p))),
-            _ => None,
-        },
+    let credentials = match (username, password) {
+        (Some(u), Some(p)) => Some(Arc::new((u, p))),
+        _ => None,
     };
-    let app = build_webui_router(state, auth);
-    axum::serve(listener, app).await?;
+    let app = AppState {
+        webui: state,
+        auth: AuthState { credentials, sessions: SessionStore::default() },
+    };
+    axum::serve(listener, build_router(app)).await?;
     Ok(())
 }
