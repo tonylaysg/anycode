@@ -15,12 +15,6 @@ impl EnvSet {
         Self { vars: Vec::new() }
     }
 
-    /// Always-present: proxy URL for Claude API.
-    pub fn with_proxy_url(mut self, url: &str) -> Self {
-        self.vars.push(("ANTHROPIC_BASE_URL".into(), url.into()));
-        self
-    }
-
     /// Set the proxy URL using the env var name appropriate for the CLI mode.
     pub fn with_proxy_url_for_mode(mut self, url: &str, proxy_env_var: &str) -> Self {
         self.vars.push((proxy_env_var.into(), url.into()));

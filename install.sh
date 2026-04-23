@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AnyClaude 一键安装脚本
+# anycode 一键安装脚本
 # 用法: curl -fsSL <url>/install.sh | bash
 #   或: bash install.sh
 
@@ -99,14 +99,14 @@ main() {
 
     printf '\n'
     if $is_update; then
-        printf '%s AnyClaude 更新程序 %s\n' "$CYAN" "$NC"
-        printf '%s ================= %s\n'  "$CYAN" "$NC"
+        printf '%s anycode 更新程序 %s\n' "$CYAN" "$NC"
+        printf '%s =============== %s\n'  "$CYAN" "$NC"
         printf '\n'
         info "检测到已有安装，将只更新二进制文件，保留现有配置"
         info "如需重新配置 WebUI，请手动编辑: ${CONFIG_FILE}"
     else
-        printf '%s AnyClaude 安装程序 %s\n' "$CYAN" "$NC"
-        printf '%s ================= %s\n'  "$CYAN" "$NC"
+        printf '%s anycode 安装程序 %s\n' "$CYAN" "$NC"
+        printf '%s =============== %s\n'  "$CYAN" "$NC"
         printf '\n'
     fi
 

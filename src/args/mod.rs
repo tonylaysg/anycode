@@ -1,4 +1,4 @@
-//! Argument handling pipeline for AnyClaude.
+//! Argument handling pipeline for anycode.
 //!
 //! This module provides a structured, declarative approach to argument processing:
 //!

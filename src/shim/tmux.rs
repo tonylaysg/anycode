@@ -25,7 +25,7 @@ use super::write_executable;
 pub const LOG_FILENAME: &str = "tmux_shim.log";
 
 const TEMPLATE: &str = r#"#!/bin/bash
-# AnyClaude tmux shim — intercepts send-keys to inject teammate routing.
+# anycode tmux shim — intercepts send-keys to inject teammate routing.
 #
 # Detects teammate spawns by --agent-id flag (agent teams protocol), then
 # registers the teammate via /api/teammate-start and replaces

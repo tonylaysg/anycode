@@ -1,9 +1,9 @@
 //! Flag registry — single source of truth for all flags.
 
-/// How AnyClaude handles a flag.
+/// How anycode handles a flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlagBehavior {
-    /// AnyClaude's own flag — consumed, never forwarded to claude.
+    /// anycode's own flag — consumed, never forwarded to claude.
     WrapperOwned,
     /// Intercepted from passthrough — consumed by wrapper, not forwarded.
     /// May be re-injected in modified form (e.g., --continue → --session-id).

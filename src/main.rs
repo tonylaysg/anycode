@@ -271,7 +271,7 @@ fn cmd_stop() -> io::Result<()> {
 
 fn cmd_reset(yes: bool) -> io::Result<()> {
     if !yes {
-        println!("此命令将清理 AnyClaude 注入到 Claude Code 的残留状态：");
+        println!("此命令将清理 anycode 注入到 Claude Code 的残留状态：");
         println!("  - 停止运行中的 anycode 实例");
         println!("  - 清理 ~/.claude/session-env/ 缓存的环境变量");
         println!("  - 清理 ~/.claude/sessions/ 中的会话记录");
@@ -454,7 +454,8 @@ fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
 
     let config_path = Config::config_path();
     let config_store = anycode::config::ConfigStore::new(config.clone(), config_path);
-    let backend_state = anycode::backend::BackendState::from_config(config.claude.clone())
+    let cli_mode = CliMode::detect();
+    let backend_state = anycode::backend::BackendState::from_config(config.profile(cli_mode).clone())
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
     let webui_state = anycode::proxy::webui::WebuiState {
         config_store,
@@ -672,10 +673,12 @@ fn run_main(run: RunArgs) -> io::Result<()> {
     };
 
     if let Some(ref backend_name) = run.backend {
-        let exists = config.claude.backends.iter().any(|b| &b.name == backend_name);
+        let cli_mode = CliMode::detect();
+        let profile = config.profile(cli_mode);
+        let exists = profile.backends.iter().any(|b| &b.name == backend_name);
         if !exists {
             let _ = disable_raw_mode();
-            let available: Vec<_> = config.claude.backends.iter().map(|b| b.name.as_str()).collect();
+            let available: Vec<_> = profile.backends.iter().map(|b| b.name.as_str()).collect();
             eprintln!("Error: Backend '{}' not found in config", backend_name);
             if available.is_empty() {
                 eprintln!("No backends configured");

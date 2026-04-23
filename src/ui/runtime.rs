@@ -121,7 +121,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
     init_global_logger(debug_logger.clone());
 
     let (ui_command_tx, ui_command_rx) = mpsc::channel(UI_COMMAND_BUFFER);
-    let mut app = App::new(config_store.clone());
+    let mut app = App::new(config_store.clone(), cli_mode);
     app.set_session_id(current_session_id.clone());
     app.set_ipc_sender(ui_command_tx.clone());
 
@@ -566,7 +566,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 let registry = crate::args::flag_registry();
                 let classified = crate::args::classify(&base_raw_args, &registry);
                 let env = crate::args::EnvSet::new()
-                    .with_proxy_url(&base_proxy_url)
+                    .with_proxy_url_for_mode(&base_proxy_url, proxy_env_var)
                     .with_session_token(&session_token)
                     .with_settings(app.settings_manager())
                     .with_shim(_teammate_shim.as_ref())
@@ -578,7 +578,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                     .with_subagent_hooks(proxy_port)
                     .build();
                 let params = SpawnParams {
-                    command: "claude".into(),
+                    command: cli_binary.into(),
                     args,
                     env,
                     session_id: current_session_id.clone(),

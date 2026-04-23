@@ -1,3 +1,4 @@
+use crate::cli_mode::CliMode;
 use crate::config::{ClaudeSettingsManager, ConfigStore};
 use crate::error::ErrorRegistry;
 use crate::ipc::{BackendInfo, ProxyStatus};
@@ -87,19 +88,19 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: ConfigStore) -> Self {
+    pub fn new(config: ConfigStore, cli_mode: CliMode) -> Self {
         let now = Instant::now();
         let mut settings_manager = ClaudeSettingsManager::new();
-        settings_manager.load_from_toml(&config.get().claude.claude_settings);
+        settings_manager.load_from_toml(&config.get().profile(cli_mode).claude_settings);
         let settings_saved_snapshot = settings_manager.snapshot_values();
 
         // Initialize subagent_backend from config
-        let subagent_backend = config.get().claude.agents
+        let subagent_backend = config.get().profile(cli_mode).agents
             .as_ref()
             .and_then(|at| at.subagent_backend.clone());
 
         // Initialize teammate_backend from config
-        let teammate_backend = config.get().claude.agents
+        let teammate_backend = config.get().profile(cli_mode).agents
             .as_ref()
             .map(|at| at.teammate_backend.clone());
 

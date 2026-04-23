@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to AnyClaude are documented in this file.
+All notable changes to anycode are documented in this file.
 
 ## [0.5.1] - 2026-04-23
 
