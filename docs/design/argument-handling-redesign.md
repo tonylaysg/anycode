@@ -524,7 +524,7 @@ mod tests {
         let params = build_spawn_params(
             &["--continue".into(), "--verbose".into()],
             SessionMode::Initial,
-            "http://127.0.0.1:8080",
+            "http://127.0.0.1:47190",
             &ClaudeSettingsManager::new(),
             None,
         );

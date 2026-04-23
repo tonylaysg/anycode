@@ -16,7 +16,7 @@ pub use claude_settings::{
     ClaudeSettingsManager, SettingDef, SettingId, SettingSection, SettingsFieldSnapshot,
 };
 pub use credentials::{AuthType, CredentialStatus, SecureString};
-pub use loader::{save_claude_settings, ConfigError};
+pub use loader::{save_claude_settings, save_config, ConfigError};
 pub use store::ConfigStore;
 pub use types::{
     AgentsConfig, Backend, BackendPricing, Config, DebugLogDestination, DebugLogFormat,

@@ -41,8 +41,8 @@ Add a `proxy` section to config for routing:
 
 ```toml
 [proxy]
-bind_addr = "127.0.0.1:8080"
-base_url = "http://127.0.0.1:8080"
+bind_addr = "127.0.0.1:47190"
+base_url = "http://127.0.0.1:47190"
 ```
 
 Defaults are provided so existing configs continue to work.

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AnyClaude — 配置管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f0f0f;color:#e0e0e0;min-height:100vh}
+a{color:#7eb8f7}
+h1{font-size:1.4rem;font-weight:600;color:#fff}
+h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
+.topbar{background:#1a1a1a;border-bottom:1px solid #333;padding:.8rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.badge{background:#2a3a2a;color:#6dbf67;font-size:.75rem;padding:.2rem .5rem;border-radius:4px;font-weight:500}
+.badge.warn{background:#3a2a1a;color:#e0a060}
+.container{max-width:960px;margin:0 auto;padding:1.5rem}
+.tabs{display:flex;gap:0;border-bottom:1px solid #333;margin-bottom:1.5rem}
+.tab{padding:.6rem 1.2rem;cursor:pointer;color:#888;font-size:.9rem;border-bottom:2px solid transparent;transition:color .15s}
+.tab:hover{color:#ccc}
+.tab.active{color:#7eb8f7;border-bottom-color:#7eb8f7}
+.card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:1.2rem;margin-bottom:1rem}
+.backend-row{display:flex;align-items:center;gap:.8rem;padding:.7rem .9rem;background:#111;border:1px solid #2a2a2a;border-radius:6px;margin-bottom:.5rem}
+.backend-row.active-row{border-color:#3a5a3a;background:#141f14}
+.backend-name{font-weight:600;font-size:.95rem;min-width:130px}
+.backend-url{color:#888;font-size:.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{font-size:.72rem;padding:.15rem .4rem;border-radius:3px;background:#222;color:#888;border:1px solid #333}
+.tag.green{background:#1a2e1a;color:#6dbf67;border-color:#2a4a2a}
+.tag.blue{background:#1a2040;color:#7eb8f7;border-color:#2a3a5a}
+.btn{padding:.4rem .9rem;border:none;border-radius:5px;cursor:pointer;font-size:.85rem;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-success{background:#16a34a;color:#fff}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-ghost{background:#2a2a2a;color:#ccc;border:1px solid #3a3a3a}
+.btn-sm{padding:.25rem .6rem;font-size:.78rem}
+.btn-group{display:flex;gap:.4rem}
+.spacer{flex:1}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.form-grid.single{grid-template-columns:1fr}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.82rem;color:#999}
+.field input,.field select{background:#111;border:1px solid #333;border-radius:5px;padding:.45rem .7rem;color:#e0e0e0;font-size:.88rem;outline:none}
+.field input:focus,.field select:focus{border-color:#4a7abf}
+.field select option{background:#1a1a1a}
+.field .hint{font-size:.75rem;color:#666}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:1.5rem;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:1rem;font-weight:600;margin-bottom:1.2rem;color:#fff}
+.modal-footer{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1.2rem}
+.alert{padding:.6rem .9rem;border-radius:5px;font-size:.85rem;margin-bottom:.8rem}
+.alert.success{background:#1a2e1a;border:1px solid #2a4a2a;color:#6dbf67}
+.alert.error{background:#2e1a1a;border:1px solid #4a2a2a;color:#f87171}
+.section-header{display:flex;align-items:center;margin-bottom:.8rem}
+.active-indicator{width:8px;height:8px;border-radius:50%;background:#6dbf67;margin-right:.5rem;flex-shrink:0}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #333;border-top-color:#7eb8f7;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{color:#888;font-size:.88rem;padding:1rem 0}
+.defaults-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>AnyClaude</h1>
+  <span class="badge" id="active-badge">加载中...</span>
+</div>
+<div class="container">
+  <div id="alert-area"></div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('backends')">后端列表</div>
+    <div class="tab" onclick="showTab('defaults')">全局设置</div>
+  </div>
+
+  <!-- Backends Tab -->
+  <div id="tab-backends">
+    <div class="section-header">
+      <span style="color:#888;font-size:.88rem;flex:1">管理 API 后端，热切换无需重启</span>
+      <button class="btn btn-primary btn-sm" onclick="openAddBackend()">＋ 添加后端</button>
+    </div>
+    <div id="backend-list"><div class="loading"><span class="spinner"></span>加载中...</div></div>
+  </div>
+
+  <!-- Defaults Tab -->
+  <div id="tab-defaults" style="display:none">
+    <div class="card">
+      <h2>请求超时设置</h2>
+      <div class="defaults-grid" id="defaults-form"></div>
+      <div style="margin-top:1rem;display:flex;justify-content:flex-end">
+        <button class="btn btn-success btn-sm" onclick="saveDefaults()">保存设置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backend Edit Modal -->
+<div class="modal-bg" id="backend-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">添加后端</div>
+    <div id="modal-alert"></div>
+    <div class="form-grid">
+      <div class="field">
+        <label>名称 (唯一 ID)</label>
+        <input id="f-name" placeholder="如: openrouter">
+        <span class="hint">英文小写，不可重复</span>
+      </div>
+      <div class="field">
+        <label>显示名称</label>
+        <input id="f-display" placeholder="如: OpenRouter">
+      </div>
+    </div>
+    <div class="form-grid single" style="margin-top:.8rem">
+      <div class="field">
+        <label>Base URL</label>
+        <input id="f-url" placeholder="https://api.example.com">
+      </div>
+    </div>
+    <div class="form-grid" style="margin-top:.8rem">
+      <div class="field">
+        <label>认证方式</label>
+        <select id="f-auth">
+          <option value="passthrough">passthrough（透传 Claude 认证）</option>
+          <option value="bearer">bearer（Authorization: Bearer）</option>
+          <option value="api_key">api_key（x-api-key）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input id="f-key" type="password" placeholder="留空表示不修改">
+        <span class="hint">passthrough 模式无需填写</span>
+      </div>
+    </div>
+    <div class="form-grid" style="margin-top:.8rem">
+      <div class="field">
+        <label>模型映射 — Opus</label>
+        <input id="f-opus" placeholder="如: provider-large（可选）">
+      </div>
+      <div class="field">
+        <label>模型映射 — Sonnet</label>
+        <input id="f-sonnet" placeholder="如: provider-medium（可选）">
+      </div>
+      <div class="field">
+        <label>模型映射 — Haiku</label>
+        <input id="f-haiku" placeholder="如: provider-small（可选）">
+      </div>
+      <div class="field">
+        <label>Thinking 兼容</label>
+        <select id="f-thinking">
+          <option value="">自动（非 Anthropic 启用）</option>
+          <option value="true">强制开启</option>
+          <option value="false">强制关闭</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn btn-success" onclick="saveBackend()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let config = null;
+let editingBackend = null;
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    config = await r.json();
+    renderBackends();
+    renderDefaults();
+    updateBadge();
+  } catch(e) {
+    showAlert('加载配置失败: ' + e.message, 'error');
+  }
+}
+
+function updateBadge() {
+  const el = document.getElementById('active-badge');
+  if (!config) return;
+  const active = config.defaults.active;
+  const b = config.backends.find(x => x.name === active);
+  el.textContent = '活跃: ' + (b ? b.display_name : active);
+}
+
+function renderBackends() {
+  const el = document.getElementById('backend-list');
+  if (!config || !config.backends.length) {
+    el.innerHTML = '<div class="loading">暂无后端配置</div>';
+    return;
+  }
+  const active = config.defaults.active;
+  el.innerHTML = config.backends.map(b => {
+    const isActive = b.name === active;
+    const authTag = `<span class="tag">${b.auth_type}</span>`;
+    const keyTag = b.api_key_set ? '<span class="tag green">Key ✓</span>' : '<span class="tag">无 Key</span>';
+    const activeBadge = isActive ? '<span class="tag green">活跃</span>' : '';
+    return `<div class="backend-row ${isActive ? 'active-row' : ''}">
+      ${isActive ? '<div class="active-indicator"></div>' : '<div style="width:8px;margin-right:.5rem"></div>'}
+      <span class="backend-name">${escHtml(b.display_name)}</span>
+      <span class="backend-url" title="${escHtml(b.base_url)}">${escHtml(b.base_url)}</span>
+      ${authTag}${keyTag}${activeBadge}
+      <div class="btn-group">
+        ${!isActive ? `<button class="btn btn-success btn-sm" onclick="switchBackend('${escHtml(b.name)}')">切换</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="openEditBackend('${escHtml(b.name)}')">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBackend('${escHtml(b.name)}')" ${isActive ? 'disabled title="不能删除活跃后端"' : ''}>删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDefaults() {
+  if (!config) return;
+  const d = config.defaults;
+  const fields = [
+    ['timeout_seconds','请求超时 (秒)', d.timeout_seconds],
+    ['connect_timeout_seconds','连接超时 (秒)', d.connect_timeout_seconds],
+    ['idle_timeout_seconds','流式空闲超时 (秒)', d.idle_timeout_seconds],
+    ['pool_idle_timeout_seconds','连接池空闲超时 (秒)', d.pool_idle_timeout_seconds],
+    ['pool_max_idle_per_host','每主机最大空闲连接', d.pool_max_idle_per_host],
+    ['max_retries','最大重试次数', d.max_retries],
+  ];
+  document.getElementById('defaults-form').innerHTML = fields.map(([k,label,val]) =>
+    `<div class="field"><label>${label}</label><input id="d-${k}" type="number" value="${val}"></div>`
+  ).join('');
+}
+
+async function saveDefaults() {
+  const keys = ['timeout_seconds','connect_timeout_seconds','idle_timeout_seconds','pool_idle_timeout_seconds','pool_max_idle_per_host','max_retries'];
+  const newDefaults = {...config.defaults};
+  for (const k of keys) {
+    const el = document.getElementById('d-' + k);
+    if (el) newDefaults[k] = parseInt(el.value, 10) || newDefaults[k];
+  }
+  const newConfig = {...config, defaults: newDefaults};
+  await saveConfig(newConfig, '全局设置已保存');
+}
+
+async function switchBackend(name) {
+  try {
+    const r = await fetch('/api/config/active', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name}),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      showAlert('切换失败: ' + t, 'error');
+      return;
+    }
+    config.defaults.active = name;
+    renderBackends();
+    updateBadge();
+    showAlert('已切换到: ' + name, 'success');
+  } catch(e) {
+    showAlert('切换失败: ' + e.message, 'error');
+  }
+}
+
+async function deleteBackend(name) {
+  if (!confirm(`确定要删除后端 "${name}" 吗？`)) return;
+  const newConfig = {...config, backends: config.backends.filter(b => b.name !== name)};
+  await saveConfig(newConfig, `后端 "${name}" 已删除`);
+}
+
+function openAddBackend() {
+  editingBackend = null;
+  document.getElementById('modal-title').textContent = '添加后端';
+  document.getElementById('modal-alert').innerHTML = '';
+  ['name','display','url','key','opus','sonnet','haiku'].forEach(id => {
+    document.getElementById('f-' + id).value = '';
+  });
+  document.getElementById('f-auth').value = 'passthrough';
+  document.getElementById('f-thinking').value = '';
+  document.getElementById('f-name').disabled = false;
+  document.getElementById('backend-modal').classList.add('open');
+}
+
+function openEditBackend(name) {
+  const b = config.backends.find(x => x.name === name);
+  if (!b) return;
+  editingBackend = name;
+  document.getElementById('modal-title').textContent = '编辑后端';
+  document.getElementById('modal-alert').innerHTML = '';
+  document.getElementById('f-name').value = b.name;
+  document.getElementById('f-name').disabled = true;
+  document.getElementById('f-display').value = b.display_name;
+  document.getElementById('f-url').value = b.base_url;
+  document.getElementById('f-auth').value = b.auth_type;
+  document.getElementById('f-key').value = '';
+  document.getElementById('f-opus').value = b.model_opus || '';
+  document.getElementById('f-sonnet').value = b.model_sonnet || '';
+  document.getElementById('f-haiku').value = b.model_haiku || '';
+  document.getElementById('f-thinking').value = b.thinking_compat === true ? 'true' : b.thinking_compat === false ? 'false' : '';
+  document.getElementById('backend-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('backend-modal').classList.remove('open');
+}
+
+async function saveBackend() {
+  const name = document.getElementById('f-name').value.trim();
+  const display = document.getElementById('f-display').value.trim();
+  const url = document.getElementById('f-url').value.trim();
+  const auth = document.getElementById('f-auth').value;
+  const key = document.getElementById('f-key').value;
+  const opus = document.getElementById('f-opus').value.trim();
+  const sonnet = document.getElementById('f-sonnet').value.trim();
+  const haiku = document.getElementById('f-haiku').value.trim();
+  const thinkingVal = document.getElementById('f-thinking').value;
+
+  if (!name || !display || !url) {
+    document.getElementById('modal-alert').innerHTML = '<div class="alert error">名称、显示名称和 URL 为必填项</div>';
+    return;
+  }
+
+  const thinking_compat = thinkingVal === 'true' ? true : thinkingVal === 'false' ? false : null;
+
+  const backend = {
+    name,
+    display_name: display,
+    base_url: url,
+    auth_type: auth,
+    api_key_input: key || null,
+    api_key_set: false,
+    model_opus: opus || null,
+    model_sonnet: sonnet || null,
+    model_haiku: haiku || null,
+    thinking_compat,
+    thinking_budget_tokens: null,
+    pricing: null,
+  };
+
+  let backends;
+  if (editingBackend) {
+    backends = config.backends.map(b => b.name === editingBackend ? backend : b);
+  } else {
+    if (config.backends.find(b => b.name === name)) {
+      document.getElementById('modal-alert').innerHTML = '<div class="alert error">名称已存在</div>';
+      return;
+    }
+    backends = [...config.backends, backend];
+  }
+
+  const newConfig = {...config, backends};
+  const ok = await saveConfig(newConfig, editingBackend ? `后端 "${name}" 已更新` : `后端 "${name}" 已添加`);
+  if (ok) closeModal();
+}
+
+async function saveConfig(newConfig, successMsg) {
+  try {
+    const r = await fetch('/api/config', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(newConfig),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      showAlert('保存失败: ' + t, 'error');
+      return false;
+    }
+    config = await r.json();
+    renderBackends();
+    renderDefaults();
+    updateBadge();
+    showAlert(successMsg, 'success');
+    return true;
+  } catch(e) {
+    showAlert('保存失败: ' + e.message, 'error');
+    return false;
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', el.onclick.toString().includes(name));
+  });
+  document.getElementById('tab-backends').style.display = name === 'backends' ? '' : 'none';
+  document.getElementById('tab-defaults').style.display = name === 'defaults' ? '' : 'none';
+}
+
+let alertTimer;
+function showAlert(msg, type) {
+  const el = document.getElementById('alert-area');
+  el.innerHTML = `<div class="alert ${type}">${escHtml(msg)}</div>`;
+  clearTimeout(alertTimer);
+  alertTimer = setTimeout(() => { el.innerHTML = ''; }, 4000);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadConfig();
+</script>
+</body>
+</html>

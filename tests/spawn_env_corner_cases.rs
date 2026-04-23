@@ -82,7 +82,7 @@ fn restart_env_contains_provided_proxy_url() {
 #[test]
 fn restart_merges_extra_env_preserves_proxy_url() {
     let args: Vec<String> = vec![];
-    let proxy_url = "http://127.0.0.1:8080";
+    let proxy_url = "http://127.0.0.1:47190";
     let extra_env = vec![
         ("CUSTOM_VAR".to_string(), "custom_value".to_string()),
         ("ANOTHER_VAR".to_string(), "another_value".to_string()),
@@ -107,7 +107,7 @@ fn restart_merges_extra_env_preserves_proxy_url() {
         .map(|(_, v)| v.clone());
     assert_eq!(
         anthropic_url,
-        Some("http://127.0.0.1:8080".to_string()),
+        Some("http://127.0.0.1:47190".to_string()),
         "ANTHROPIC_BASE_URL should be preserved when merging extra env"
     );
 

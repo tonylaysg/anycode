@@ -66,6 +66,7 @@ impl ProxyServer {
             debug_logger.clone(),
             transformer_registry.clone(),
             session_token,
+            config.clone(),
         );
         Ok(Self {
             addr: SocketAddr::from(([127, 0, 0, 1], 0)),

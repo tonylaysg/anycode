@@ -158,6 +158,15 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         spawn.args.extend(assembler.build());
     }
 
+    // Log WebUI address so the user knows where to open the config UI.
+    crate::metrics::app_log(
+        "webui",
+        &format!(
+            "Config UI available at http://127.0.0.1:{}/ui/",
+            actual_addr.port()
+        ),
+    );
+
     // Inject shim PATH into spawn.env so the first Claude process also uses the shim.
     // (build_spawn_params was called with shim=None because the shim didn't exist yet.)
     if let Some(ref shim) = _teammate_shim {

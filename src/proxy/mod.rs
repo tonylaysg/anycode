@@ -10,5 +10,6 @@ pub mod shutdown;
 pub mod thinking;
 pub mod timeout;
 pub mod pipeline;
+pub mod webui;
 
 pub use server::{ProxyHandle, ProxyServer};

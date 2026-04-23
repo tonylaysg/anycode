@@ -86,7 +86,7 @@ pub struct ProxyServer {
 
 impl ProxyServer {
     pub fn new(config: ConfigStore) -> Self {
-        let addr = "127.0.0.1:8080".parse().expect("Invalid bind address");
+        let addr = "127.0.0.1:47190".parse().expect("Invalid bind address");
         let router = RouterEngine::new(config.clone());
         Self {
             addr,

@@ -194,11 +194,11 @@ fn default_debug_rotation_max_files() -> usize {
 }
 
 fn default_proxy_bind_addr() -> String {
-    "127.0.0.1:8080".to_string()
+    "127.0.0.1:47190".to_string()
 }
 
 fn default_proxy_base_url() -> String {
-    "http://127.0.0.1:8080".to_string()
+    "http://127.0.0.1:47190".to_string()
 }
 
 /// Backend configuration for an API provider.

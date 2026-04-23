@@ -190,6 +190,48 @@ impl Config {
     }
 }
 
+/// Save a full Config to the given path.
+///
+/// Creates the parent directory if it doesn't exist.
+/// Uses an exclusive file lock to prevent concurrent writes.
+pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| ConfigError::ReadError {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+    }
+
+    let content = toml::to_string_pretty(config).map_err(|e| ConfigError::ValidationError {
+        message: format!("Failed to serialize config: {}", e),
+    })?;
+
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|e| ConfigError::ReadError {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+    fs2::FileExt::lock_exclusive(&file).map_err(|e| ConfigError::ReadError {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+
+    use std::io::Write;
+    (&file)
+        .write_all(content.as_bytes())
+        .map_err(|e| ConfigError::ReadError {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
+
+    Ok(())
+}
+
 /// Save claude_settings section to the config file.
 ///
 /// Loads the existing Config, updates the `claude_settings` field,
