@@ -21,5 +21,5 @@ pub use store::ConfigStore;
 pub use types::{
     AgentsConfig, Backend, BackendPricing, Config, DebugLogDestination, DebugLogFormat,
     DebugLogLevel, DebugLogRotation, DebugLogRotationMode, DebugLoggingConfig, Defaults,
-    ProxyConfig, TerminalConfig,
+    ProxyConfig, TerminalConfig, WebuiConfig,
 };

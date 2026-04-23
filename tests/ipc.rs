@@ -27,6 +27,7 @@ fn test_config() -> Config {
             retry_backoff_base_ms: 100,
         },
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),

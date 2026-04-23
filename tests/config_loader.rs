@@ -51,6 +51,7 @@ fn test_validation_fails_empty_backends() {
     let config = Config {
         defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
@@ -84,6 +85,7 @@ fn test_validation_fails_missing_active_backend() {
             retry_backoff_base_ms: 100,
         },
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
@@ -284,6 +286,7 @@ fn test_validation_fails_unconfigured_active_backend() {
             retry_backoff_base_ms: 100,
         },
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
@@ -321,6 +324,7 @@ fn test_validation_fails_invalid_teammate_backend() {
     let config = Config {
         defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
@@ -380,6 +384,7 @@ fn test_validation_passes_valid_teammate_backend() {
     let config = Config {
         defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
@@ -408,6 +413,7 @@ fn test_configured_backends_filters_correctly() {
             retry_backoff_base_ms: 100,
         },
         proxy: ProxyConfig::default(),
+        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),

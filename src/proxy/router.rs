@@ -10,7 +10,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::backend::{BackendState, AgentBackendState, AgentRegistry};
-use crate::config::{ConfigStore, DebugLogLevel};
+use crate::config::DebugLogLevel;
 use crate::proxy::error::ErrorResponse;
 use crate::proxy::hooks::HookState;
 use crate::metrics::{DebugLogger, ObservabilityHub, RequestMeta};
@@ -19,7 +19,6 @@ use crate::proxy::pipeline::{PipelineConfig, PipelineContext};
 use crate::proxy::pool::PoolConfig;
 use crate::proxy::thinking::TransformerRegistry;
 use crate::proxy::timeout::TimeoutConfig;
-use crate::proxy::webui::{WebuiState, build_webui_router};
 
 /// Fixed backend override for the teammate pipeline.
 ///
@@ -47,7 +46,6 @@ pub struct RouterEngine {
     pub(crate) debug_logger: Arc<DebugLogger>,
     pipeline_config: PipelineConfig,
     pub(crate) session_token: Option<String>,
-    config_store: ConfigStore,
 }
 
 impl RouterEngine {
@@ -63,7 +61,6 @@ impl RouterEngine {
         debug_logger: Arc<DebugLogger>,
         transformer_registry: Arc<TransformerRegistry>,
         session_token: Option<String>,
-        config_store: ConfigStore,
     ) -> Self {
         let pipeline_config = PipelineConfig::new(
             backend_state.clone(),
@@ -82,7 +79,6 @@ impl RouterEngine {
             debug_logger,
             pipeline_config,
             session_token,
-            config_store,
         }
     }
 }
@@ -115,13 +111,6 @@ async fn auth_middleware(
 pub fn build_router(
     engine: RouterEngine,
 ) -> Router {
-    // WebUI: config management UI and REST API (no auth — localhost only).
-    let webui_state = WebuiState {
-        config_store: engine.config_store.clone(),
-        backend_state: engine.backend_state.clone(),
-    };
-    let webui = build_webui_router(webui_state);
-
     // Main pipeline: auth middleware only (thinking is handled inside the pipeline)
     let main = Router::new()
         .fallback(proxy_handler)
@@ -147,8 +136,7 @@ pub fn build_router(
     let mut router = Router::new()
         .route("/health", get(health_handler))
         .with_state(engine.clone())
-        .merge(hook_routes)
-        .merge(webui);
+        .merge(hook_routes);
 
     // Teammate pipeline: dynamic per-teammate backend via agent_id in URL path.
     // URL: /teammate/{agent_id}/v1/messages → agent_id extracted, path stripped.

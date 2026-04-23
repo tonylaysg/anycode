@@ -112,6 +112,11 @@ active = "anthropic"
 bind_addr = "127.0.0.1:47190"
 base_url  = "http://127.0.0.1:47190"
 
+[webui]
+bind_addr = "127.0.0.1:47191"
+# 如需局域网访问请改为: bind_addr = "0.0.0.0:47191"
+# 建议同时设置密码: password = "yourpassword"
+
 [[backends]]
 name         = "anthropic"
 display_name = "Anthropic (官方)"
@@ -162,7 +167,7 @@ EOF
     echo -e "    ${CYAN}anyclaude --backend <name>${NC}  # 指定初始后端"
     echo ""
     echo -e "  ${YELLOW}Web 配置界面:${NC}"
-    echo -e "    启动后浏览器访问 ${CYAN}http://127.0.0.1:47190/ui/${NC}"
+    echo -e "    启动后浏览器访问 ${CYAN}http://127.0.0.1:47191${NC}"
     echo -e "    可在线管理后端、切换 API 提供商（无需编辑文件）"
     echo ""
     if [[ -n "$shell_rc" ]]; then

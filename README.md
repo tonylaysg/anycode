@@ -128,6 +128,10 @@ retry_backoff_base_ms = 100       # Base backoff for retries (exponential)
 bind_addr = "127.0.0.1:47190"      # Local proxy listen address (auto-increments if busy)
 base_url = "http://127.0.0.1:47190" # Base URL exposed to Claude Code
 
+[webui]
+bind_addr = "127.0.0.1:47191"      # WebUI listen address; use 0.0.0.0:47191 for LAN access
+# password = "yourpassword"        # Optional: enable Basic Auth (recommended for LAN/remote)
+
 [terminal]
 scrollback_lines = 10000          # History buffer size
 

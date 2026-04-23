@@ -8,6 +8,8 @@ pub struct Config {
     #[serde(default)]
     pub proxy: ProxyConfig,
     #[serde(default)]
+    pub webui: WebuiConfig,
+    #[serde(default)]
     pub terminal: TerminalConfig,
     #[serde(default)]
     pub debug_logging: DebugLoggingConfig,
@@ -56,6 +58,21 @@ pub struct ProxyConfig {
     /// Base URL exposed to Claude Code (scheme + host + port).
     #[serde(default = "default_proxy_base_url")]
     pub base_url: String,
+}
+
+/// Web configuration management UI settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebuiConfig {
+    /// Bind address for the WebUI server.
+    /// Use `0.0.0.0:47191` to allow LAN/remote access.
+    /// Default: `127.0.0.1:47191` (localhost only).
+    #[serde(default = "default_webui_bind_addr")]
+    pub bind_addr: String,
+    /// Optional password for WebUI access (HTTP Basic Auth).
+    /// Leave empty (or omit) to disable authentication.
+    /// Recommended when bind_addr is not 127.0.0.1.
+    #[serde(default)]
+    pub password: Option<String>,
 }
 
 /// Terminal display settings.
@@ -201,6 +218,10 @@ fn default_proxy_base_url() -> String {
     "http://127.0.0.1:47190".to_string()
 }
 
+fn default_webui_bind_addr() -> String {
+    "127.0.0.1:47191".to_string()
+}
+
 /// Backend configuration for an API provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Backend {
@@ -295,6 +316,7 @@ impl Default for Config {
         Self {
             defaults: Defaults::default(),
             proxy: ProxyConfig::default(),
+            webui: WebuiConfig::default(),
             terminal: TerminalConfig::default(),
             debug_logging: DebugLoggingConfig::default(),
             claude_settings: HashMap::new(),
@@ -309,6 +331,15 @@ impl Default for ProxyConfig {
         Self {
             bind_addr: default_proxy_bind_addr(),
             base_url: default_proxy_base_url(),
+        }
+    }
+}
+
+impl Default for WebuiConfig {
+    fn default() -> Self {
+        Self {
+            bind_addr: default_webui_bind_addr(),
+            password: None,
         }
     }
 }

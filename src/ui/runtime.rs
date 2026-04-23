@@ -158,14 +158,36 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         spawn.args.extend(assembler.build());
     }
 
-    // Log WebUI address so the user knows where to open the config UI.
-    crate::metrics::app_log(
-        "webui",
-        &format!(
-            "Config UI available at http://127.0.0.1:{}/ui/",
-            actual_addr.port()
-        ),
-    );
+    // Start the WebUI server on its own bind address (separate from the proxy).
+    // This allows LAN/remote access by setting [webui] bind_addr = "0.0.0.0:47191".
+    {
+        let webui_cfg = config_store.get().webui.clone();
+        let webui_state = crate::proxy::webui::WebuiState {
+            config_store: config_store.clone(),
+            backend_state: proxy_server.backend_state(),
+        };
+        match async_runtime.block_on(crate::proxy::webui::bind_webui(&webui_cfg.bind_addr)) {
+            Ok((webui_addr, webui_listener)) => {
+                let password = webui_cfg.password.clone();
+                let password_note = if password.is_some() { " (密码保护)" } else { "" };
+                crate::metrics::app_log(
+                    "webui",
+                    &format!(
+                        "Config UI available at http://{}/ui/{}",
+                        webui_addr, password_note
+                    ),
+                );
+                async_runtime.spawn(async move {
+                    if let Err(err) = crate::proxy::webui::serve_webui(webui_listener, webui_state, password).await {
+                        crate::metrics::app_log_error("webui", "WebUI server exited", &err.to_string());
+                    }
+                });
+            }
+            Err(err) => {
+                crate::metrics::app_log_error("webui", "Failed to start WebUI server", &err.to_string());
+            }
+        }
+    }
 
     // Inject shim PATH into spawn.env so the first Claude process also uses the shim.
     // (build_spawn_params was called with shim=None because the shim didn't exist yet.)

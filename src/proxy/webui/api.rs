@@ -133,6 +133,7 @@ pub async fn put_config(
     let new_config = Config {
         defaults: dto.defaults,
         proxy: existing.proxy.clone(),
+        webui: existing.webui.clone(),
         terminal: existing.terminal.clone(),
         debug_logging: existing.debug_logging.clone(),
         claude_settings: existing.claude_settings.clone(),

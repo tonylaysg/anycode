@@ -54,7 +54,7 @@ fn config_with_teams(
         proxy: ProxyConfig {
             bind_addr: bind_addr.to_string(),
             base_url: format!("http://{}", bind_addr),
-        },
+        },        webui: anyclaude::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
