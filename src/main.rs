@@ -64,6 +64,9 @@ enum Commands {
         /// Override bind address (e.g. 0.0.0.0:47191 for LAN access)
         #[arg(long, value_name = "ADDR")]
         bind: Option<String>,
+        /// Run as background daemon (detach from terminal, write PID file)
+        #[arg(long, short = 'd')]
+        daemon: bool,
     },
 
     /// Change WebUI access mode (local / lan / public / custom address)
@@ -239,7 +242,7 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     Ok(())
 }
 
-fn cmd_webui(bind_override: Option<String>) -> io::Result<()> {
+fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
     let config = match Config::load() {
         Ok(c) => c,
         Err(e) => {
@@ -250,10 +253,52 @@ fn cmd_webui(bind_override: Option<String>) -> io::Result<()> {
     };
 
     let bind_addr = bind_override
+        .clone()
         .unwrap_or_else(|| config.webui.bind_addr.clone());
     let username = config.webui.username.clone();
     let password = config.webui.password.clone();
 
+    // ── Daemon mode: re-exec self without --daemon, detached ──────────────────
+    if daemon {
+        let log_dir = Config::config_path()
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("/tmp"))
+            .to_path_buf();
+        let log_path = log_dir.join("webui.log");
+        let pid_path = log_dir.join("webui.pid");
+
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
+
+        let mut cmd = std::process::Command::new(std::env::current_exe()?);
+        cmd.arg("webui");
+        if let Some(ref b) = bind_override {
+            cmd.args(["--bind", b]);
+        }
+        let child = cmd
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::from(log_file.try_clone()?))
+            .stderr(std::process::Stdio::from(log_file))
+            .spawn()?;
+
+        let pid = child.id();
+        std::fs::write(&pid_path, pid.to_string())?;
+
+        let auth_note = if username.is_some() && password.is_some() {
+            " (账号密码保护)"
+        } else {
+            " (无需认证)"
+        };
+        println!("WebUI 已在后台启动 (PID {})", pid);
+        println!("地址: http://{}{}", bind_addr, auth_note);
+        println!("日志: {}", log_path.display());
+        println!("停止: anyclaude webui --stop  或  kill {}", pid);
+        return Ok(());
+    }
+
+    // ── Foreground mode ───────────────────────────────────────────────────────
     let auth_note = if username.is_some() && password.is_some() {
         " (账号密码保护)"
     } else {
@@ -440,7 +485,7 @@ fn main() -> io::Result<()> {
             Commands::Logs { lines, follow } => cmd_logs(lines, follow),
             Commands::Stop => cmd_stop(),
             Commands::Uninstall { purge, yes } => cmd_uninstall(purge, yes),
-            Commands::Webui { bind } => cmd_webui(bind),
+            Commands::Webui { bind, daemon } => cmd_webui(bind, daemon),
             Commands::Bind { mode } => cmd_bind(&mode),
             Commands::Passwd => cmd_passwd(),
         };
