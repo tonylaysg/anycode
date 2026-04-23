@@ -28,6 +28,7 @@ pub struct Defaults {
     /// Name of the active backend by default.
     pub active: String,
     /// Request timeout in seconds.
+    #[serde(default = "default_timeout_seconds")]
     pub timeout_seconds: u32,
     /// Connection timeout in seconds (default: 5).
     #[serde(default = "default_connect_timeout")]
@@ -160,6 +161,10 @@ pub enum DebugLogRotationMode {
     None,
     Size,
     Daily,
+}
+
+fn default_timeout_seconds() -> u32 {
+    30
 }
 
 fn default_connect_timeout() -> u32 {
