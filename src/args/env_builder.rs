@@ -21,6 +21,12 @@ impl EnvSet {
         self
     }
 
+    /// Set the proxy URL using the env var name appropriate for the CLI mode.
+    pub fn with_proxy_url_for_mode(mut self, url: &str, proxy_env_var: &str) -> Self {
+        self.vars.push((proxy_env_var.into(), url.into()));
+        self
+    }
+
     /// Handle Anthropic auth environment variables for the child process.
     ///
     /// Claude Code checks for existing credentials (`ANTHROPIC_AUTH_TOKEN` or
@@ -77,6 +83,15 @@ impl EnvSet {
     pub fn with_shim(mut self, shim: Option<&TeammateShim>) -> Self {
         if let Some(s) = shim {
             self.vars.push(s.path_env());
+        }
+        self
+    }
+
+    /// Inject COPILOT_HOME for data isolation when running in Copilot mode.
+    pub fn with_copilot_home(mut self) -> Self {
+        if let Some(home) = dirs::home_dir() {
+            let copilot_home = home.join(".config/anycode/copilot-home");
+            self.vars.push(("COPILOT_HOME".into(), copilot_home.to_string_lossy().into_owned()));
         }
         self
     }

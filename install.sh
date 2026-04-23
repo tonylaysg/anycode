@@ -137,6 +137,10 @@ main() {
         install_from_source; installed_via="source"
     fi
 
+    # ── 创建 anycopilot 符号链接（Copilot CLI 模式）───────────────────────────
+    ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/anycopilot"
+    success "已创建符号链接: ${INSTALL_DIR}/anycopilot → ${BINARY}"
+
     # ── 更新模式：跳过配置向导，直接显示完成摘要 ──────────────────────────────
     if $is_update; then
         local version
@@ -270,6 +274,7 @@ EOF
     printf '%s=== 安装完成 ===%s\n' "$GREEN" "$NC"
     printf '\n'
     printf '  二进制:    %s%s/%s%s\n' "$CYAN" "$INSTALL_DIR" "$BINARY" "$NC"
+    printf '  符号链接:  %s%s/anycopilot%s → anycode (Copilot CLI 模式)\n' "$CYAN" "$INSTALL_DIR" "$NC"
     printf '  版本:      %s%s%s\n'   "$CYAN" "$version"      "$NC"
     printf '  安装方式:  %s%s%s\n'   "$CYAN" "$installed_via" "$NC"
     printf '  配置文件:  %s%s%s\n'   "$CYAN" "$CONFIG_FILE"   "$NC"

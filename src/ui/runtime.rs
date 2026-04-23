@@ -1,4 +1,5 @@
 use crate::args::{build_restart_params, build_spawn_params, SpawnParams};
+use crate::cli_mode::CliMode;
 use crate::clipboard::ClipboardHandler;
 use crate::config::{save_claude_settings, AuthType, ClaudeSettingsManager, Config, ConfigStore};
 use crate::error::{ErrorCategory, ErrorSeverity};
@@ -28,7 +29,7 @@ use uuid::Uuid;
 const UI_COMMAND_BUFFER: usize = 32;
 const STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
-pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Result<()> {
+pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<String>) -> io::Result<()> {
     let (mut terminal, guard) = setup_terminal()?;
     let tick_rate = Duration::from_millis(250);
 
@@ -36,8 +37,9 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     let mut config = Config::load().map_err(|e| {
         io::Error::new(io::ErrorKind::InvalidData, format!("Failed to load config: {}", e))
     })?;
+    let profile = config.profile_mut(cli_mode);
     if let Some(backend_name) = backend_override {
-        config.claude.defaults.active = backend_name;
+        profile.defaults.active = backend_name;
     }
     let config_path = Config::config_path();
     let config_store = ConfigStore::new(config, config_path);
@@ -56,7 +58,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     // Config is loaded once at startup and remains static for the session.
 
     // Store base args for restart scenarios
-    let base_raw_args = claude_args.clone();
+    let base_raw_args = cli_args.clone();
     let base_proxy_url = config_store.get().proxy.base_url.clone();
 
     // Generate session token for proxy authentication.
@@ -70,17 +72,22 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     // vars are populated with the config's base_proxy_url at this point.
     let scrollback_lines = config_store.get().terminal.scrollback_lines;
     let mut settings_manager = ClaudeSettingsManager::new();
-    settings_manager.load_from_toml(&config_store.get().claude.claude_settings);
+    settings_manager.load_from_toml(&config_store.get().profile(cli_mode).claude_settings);
     let is_passthrough = {
         let cfg = config_store.get();
-        cfg.claude.backends.iter()
-            .find(|b| b.name == cfg.claude.defaults.active)
+        let profile = cfg.profile(cli_mode);
+        profile.backends.iter()
+            .find(|b| b.name == profile.defaults.active)
             .map(|b| b.auth_type() == AuthType::Passthrough)
             .unwrap_or(true)
     };
+    let proxy_env_var = cli_mode.proxy_env_var();
+    let cli_binary = cli_mode.binary();
     let mut spawn = build_spawn_params(
         &base_raw_args,
         &base_proxy_url,
+        proxy_env_var,
+        cli_binary,
         &session_token,
         &settings_manager,
         None, // shim not needed here — we only use session_id from the result
@@ -118,7 +125,7 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
     app.set_session_id(current_session_id.clone());
     app.set_ipc_sender(ui_command_tx.clone());
 
-    let mut proxy_server = ProxyServer::new(config_store.clone(), debug_logger.clone(), Some(session_token.clone()))
+    let mut proxy_server = ProxyServer::new(config_store.clone(), cli_mode, debug_logger.clone(), Some(session_token.clone()))
         .map_err(|err| io::Error::other(err.to_string()))?;
 
     // Try to bind and get the actual port, updating the base URL.
@@ -130,11 +137,11 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
         proxy_server.try_bind(&config_store).await
     }).map_err(|err| io::Error::other(err.to_string()))?;
 
-    // Update ANTHROPIC_BASE_URL in spawn.env to use the actual bound port.
+    // Update the proxy URL env var in spawn.env to use the actual bound port.
     // This is necessary because build_spawn_params was called before we knew
     // the actual port (it needed session_id early for per-session logging).
     for (key, value) in &mut spawn.env {
-        if key == "ANTHROPIC_BASE_URL" {
+        if key == proxy_env_var {
             *value = actual_base_url.clone();
         }
     }
@@ -520,6 +527,8 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
                         let params = build_spawn_params(
                             &base_raw_args,
                             &base_proxy_url,
+                            proxy_env_var,
+                            cli_binary,
                             &session_token,
                             app.settings_manager(),
                             _teammate_shim.as_ref(),
@@ -596,6 +605,8 @@ pub fn run(backend_override: Option<String>, claude_args: Vec<String>) -> io::Re
                 let params = build_restart_params(
                     &base_raw_args,
                     &base_proxy_url,
+                    proxy_env_var,
+                    cli_binary,
                     &session_token,
                     app.settings_manager(),
                     _teammate_shim.as_ref(),

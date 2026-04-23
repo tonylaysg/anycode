@@ -3,6 +3,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 
+use anycode::cli_mode::CliMode;
 use anycode::config::{Config, save_config};
 
 // ── CLI 结构 ──────────────────────────────────────────────────────────────────
@@ -679,5 +680,5 @@ fn run_main(run: RunArgs) -> io::Result<()> {
     let _ = std::fs::write(&pid_path, std::process::id().to_string());
     let _pid_guard = PidGuard(pid_path); // auto-deleted on exit
 
-    anycode::ui::run(run.backend, run.args)
+    anycode::ui::run(CliMode::detect(), run.backend, run.args)
 }

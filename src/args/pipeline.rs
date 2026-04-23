@@ -31,7 +31,9 @@ pub struct SpawnParams {
 /// # Arguments
 ///
 /// * `raw_args` - Raw arguments from the user (after wrapper flags like `--backend` are stripped)
-/// * `proxy_url` - The proxy URL to inject as ANTHROPIC_BASE_URL
+/// * `proxy_url` - The proxy URL to inject as the backend URL env var
+/// * `proxy_env_var` - The env var name to use for the proxy URL (e.g. ANTHROPIC_BASE_URL or COPILOT_API_URL)
+/// * `command` - The CLI binary to spawn (e.g. "claude" or "copilot")
 /// * `session_token` - The session token to inject via ANTHROPIC_CUSTOM_HEADERS
 /// * `settings` - Settings manager for CLI flags and env vars
 /// * `shim` - Optional teammate shim for PATH override and --teammate-mode
@@ -42,6 +44,8 @@ pub struct SpawnParams {
 pub fn build_spawn_params(
     raw_args: &[String],
     proxy_url: &str,
+    proxy_env_var: &str,
+    command: &str,
     session_token: &str,
     settings: &ClaudeSettingsManager,
     shim: Option<&TeammateShim>,
@@ -63,13 +67,21 @@ pub fn build_spawn_params(
     };
 
     // Stage 3: Build environment
-    let env = EnvSet::new()
-        .with_proxy_url(proxy_url)
-        .with_auth_bypass(is_passthrough)
+    let is_copilot = proxy_env_var == "COPILOT_API_URL";
+    let mut env_set = EnvSet::new()
+        .with_proxy_url_for_mode(proxy_url, proxy_env_var);
+    // Auth bypass is Claude-specific (injects ANTHROPIC_API_KEY placeholder).
+    if !is_copilot {
+        env_set = env_set.with_auth_bypass(is_passthrough);
+    }
+    let mut env_set = env_set
         .with_session_token(session_token)
         .with_settings(settings)
-        .with_shim(shim)
-        .build();
+        .with_shim(shim);
+    if is_copilot {
+        env_set = env_set.with_copilot_home();
+    }
+    let env = env_set.build();
 
     // Stage 4: Assemble arguments
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)
@@ -86,7 +98,7 @@ pub fn build_spawn_params(
     warnings.extend(session.warnings);
 
     SpawnParams {
-        command: "claude".into(),
+        command: command.into(),
         args,
         env,
         session_id: session.session_id,
@@ -102,6 +114,8 @@ pub fn build_spawn_params(
 pub fn build_restart_params(
     raw_args: &[String],
     proxy_url: &str,
+    proxy_env_var: &str,
+    command: &str,
     session_token: &str,
     settings: &ClaudeSettingsManager,
     shim: Option<&TeammateShim>,
@@ -126,7 +140,7 @@ pub fn build_restart_params(
 
     // Stage 3: Build environment (with extra)
     let env = EnvSet::new()
-        .with_proxy_url(proxy_url)
+        .with_proxy_url_for_mode(proxy_url, proxy_env_var)
         .with_auth_bypass(is_passthrough)
         .with_session_token(session_token)
         .with_settings(settings)
@@ -149,7 +163,7 @@ pub fn build_restart_params(
     warnings.extend(session.warnings);
 
     SpawnParams {
-        command: "claude".into(),
+        command: command.into(),
         args,
         env,
         session_id: session.session_id,

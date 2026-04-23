@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 
 use crate::backend::{BackendState, AgentBackendState, AgentRegistry};
+use crate::cli_mode::CliMode;
 use crate::config::ConfigStore;
 use crate::metrics::{DebugLogger, ObservabilityHub};
 use crate::proxy::connection::ConnectionCounter;
@@ -33,20 +34,22 @@ pub struct ProxyServer {
 impl ProxyServer {
     pub fn new(
         config: ConfigStore,
+        cli_mode: CliMode,
         debug_logger: Arc<DebugLogger>,
         session_token: Option<String>,
     ) -> Result<Self, crate::backend::BackendError> {
         let cfg = config.get();
-        let timeout_config = TimeoutConfig::from(&cfg.claude.defaults);
-        let pool_config = PoolConfig::from(&cfg.claude.defaults);
-        let backend_state = BackendState::from_config(cfg.claude.clone())?;
+        let profile = cfg.profile(cli_mode);
+        let timeout_config = TimeoutConfig::from(&profile.defaults);
+        let pool_config = PoolConfig::from(&profile.defaults);
+        let backend_state = BackendState::from_config(profile.clone())?;
 
         // Initialize agent backend states from config
-        let subagent_initial = cfg.claude.agents
+        let subagent_initial = profile.agents
             .as_ref()
             .and_then(|at| at.subagent_backend.clone());
         let subagent_backend = AgentBackendState::new(subagent_initial);
-        let teammate_initial = cfg.claude.agents
+        let teammate_initial = profile.agents
             .as_ref()
             .map(|at| at.teammate_backend.clone());
         let teammate_backend = AgentBackendState::new(teammate_initial);
