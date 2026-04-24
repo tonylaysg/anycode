@@ -21,7 +21,7 @@ fn build_spawn(raw_args: &[String]) -> anycode::args::SpawnParams {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false)
+false, "anthropic")
 }
 
 // =============================================================================
@@ -189,7 +189,7 @@ fn resume_appends_extra_args() {
         vec![],
         extra,
             None,
-false);
+false, "anthropic");
     assert!(p.args.contains(&"--verbose".to_string()));
     assert!(p.args.contains(&"--resume".to_string()));
 }
@@ -219,7 +219,7 @@ fn restart_merges_extra_env() {
         extra_env,
         vec![],
             None,
-false);
+false, "anthropic");
     assert!(p.env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
     assert!(p.env.iter().any(|(k, v)| k == "FOO" && v == "1"));
 }

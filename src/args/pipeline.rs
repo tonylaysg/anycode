@@ -51,6 +51,7 @@ pub fn build_spawn_params(
     shim: Option<&TeammateShim>,
     proxy_port: Option<u16>,
     is_passthrough: bool,
+    copilot_provider_type: &str,
 ) -> SpawnParams {
     let registry = flag_registry();
 
@@ -68,20 +69,26 @@ pub fn build_spawn_params(
 
     // Stage 3: Build environment
     let is_copilot = proxy_env_var == "COPILOT_API_URL";
-    let mut env_set = EnvSet::new()
-        .with_proxy_url_for_mode(proxy_url, proxy_env_var);
-    if is_copilot {
-        // Also intercept Anthropic-SDK calls (sweagent-anthropic agent uses ANTHROPIC_BASE_URL).
-        env_set = env_set.with_copilot_env(proxy_url);
+    let env = if is_copilot {
+        // Copilot BYOK mode: skip COPILOT_API_URL entirely; COPILOT_OFFLINE=true
+        // combined with COPILOT_PROVIDER_BASE_URL replaces the GitHub OAuth flow.
+        // No ANTHROPIC_CUSTOM_HEADERS (Claude-only) and no auth bypass placeholder —
+        // the Copilot CLI sends the session_token via `Authorization: Bearer` and
+        // the proxy's auth middleware accepts that form.
+        EnvSet::new()
+            .with_copilot_env(proxy_url, session_token, copilot_provider_type)
+            .with_settings(settings)
+            .with_shim(shim)
+            .build()
     } else {
-        // Claude Code: inject auth bypass placeholder so CC skips its login screen.
-        env_set = env_set.with_auth_bypass(is_passthrough);
-    }
-    let env = env_set
-        .with_session_token(session_token)
-        .with_settings(settings)
-        .with_shim(shim)
-        .build();
+        EnvSet::new()
+            .with_proxy_url_for_mode(proxy_url, proxy_env_var)
+            .with_auth_bypass(is_passthrough)
+            .with_session_token(session_token)
+            .with_settings(settings)
+            .with_shim(shim)
+            .build()
+    };
 
     // Stage 4: Assemble arguments
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)
@@ -124,6 +131,7 @@ pub fn build_restart_params(
     extra_args: Vec<String>,
     proxy_port: Option<u16>,
     is_passthrough: bool,
+    copilot_provider_type: &str,
 ) -> SpawnParams {
     let registry = flag_registry();
 
@@ -141,19 +149,23 @@ pub fn build_restart_params(
 
     // Stage 3: Build environment (with extra)
     let is_copilot = proxy_env_var == "COPILOT_API_URL";
-    let mut env_set = EnvSet::new()
-        .with_proxy_url_for_mode(proxy_url, proxy_env_var);
-    if is_copilot {
-        env_set = env_set.with_copilot_env(proxy_url);
+    let env = if is_copilot {
+        EnvSet::new()
+            .with_copilot_env(proxy_url, session_token, copilot_provider_type)
+            .with_settings(settings)
+            .with_shim(shim)
+            .with_extra(extra_env)
+            .build()
     } else {
-        env_set = env_set.with_auth_bypass(is_passthrough);
-    }
-    let env = env_set
-        .with_session_token(session_token)
-        .with_settings(settings)
-        .with_shim(shim)
-        .with_extra(extra_env)
-        .build();
+        EnvSet::new()
+            .with_proxy_url_for_mode(proxy_url, proxy_env_var)
+            .with_auth_bypass(is_passthrough)
+            .with_session_token(session_token)
+            .with_settings(settings)
+            .with_shim(shim)
+            .with_extra(extra_env)
+            .build()
+    };
 
     // Stage 4: Assemble arguments (with extra)
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)

@@ -24,7 +24,7 @@ fn spawn_env_contains_custom_headers_with_session_token() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Check that ANTHROPIC_CUSTOM_HEADERS contains the session token
     let custom_headers = params
@@ -67,7 +67,7 @@ fn restart_env_contains_custom_headers_with_session_token() {
         vec![],
         vec![],
             None,
-false);
+false, "anthropic");
 
     // Check that ANTHROPIC_CUSTOM_HEADERS contains the session token
     let custom_headers = params
@@ -125,7 +125,7 @@ fn spawn_env_has_all_required_vars() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Should have ANTHROPIC_BASE_URL
     assert!(
@@ -158,7 +158,7 @@ fn restart_env_has_all_required_vars() {
         vec![],
         vec![],
             None,
-false);
+false, "anthropic");
 
     // Should have ANTHROPIC_BASE_URL
     assert!(
@@ -276,6 +276,42 @@ async fn middleware_accepts_correct_token() {
         "Should pass auth middleware, got: {}",
         body,
     );
+}
+
+/// Copilot BYOK path: Authorization: Bearer <token> must be accepted.
+/// Copilot CLI in BYOK mode has no way to inject custom headers, so it
+/// sends the provider key as a Bearer token. The middleware must accept
+/// that as equivalent to x-session-token.
+#[tokio::test]
+async fn middleware_accepts_bearer_token() {
+    let addr = start_server_with_token(Some("secret-token".into())).await;
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/v1/messages", addr))
+        .header("authorization", "Bearer secret-token")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    let body = resp.text().await.unwrap();
+    assert!(
+        !body.contains("invalid session token"),
+        "Bearer token should pass auth middleware, got: {}",
+        body,
+    );
+}
+
+/// Bearer with wrong value → 401.
+#[tokio::test]
+async fn middleware_rejects_wrong_bearer_token() {
+    let addr = start_server_with_token(Some("secret-token".into())).await;
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/v1/messages", addr))
+        .header("authorization", "Bearer wrong-token")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 401);
 }
 
 /// /health without token → 200 (health is not auth-protected)

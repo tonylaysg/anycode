@@ -100,6 +100,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
         None, // shim not needed here — we only use session_id from the result
         None, // proxy_port unknown yet — will be updated after try_bind
         is_passthrough,
+        "anthropic", // Copilot BYOK wire type — Phase 4 will wire this from config.
     );
     let current_session_id = spawn.session_id.clone();
 
@@ -547,6 +548,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                             _teammate_shim.as_ref(),
                             Some(proxy_port),
                             is_passthrough,
+                            "anthropic",
                         );
                         respawn_pty(
                             &mut app,
@@ -578,15 +580,16 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 restart_can_retry = true;
                 let registry = crate::args::flag_registry();
                 let classified = crate::args::classify(&base_raw_args, &registry);
-                let env = {
-                    let mut env_set = crate::args::EnvSet::new()
-                        .with_proxy_url_for_mode(&base_proxy_url, proxy_env_var);
-                    if proxy_env_var == "COPILOT_API_URL" {
-                        env_set = env_set.with_copilot_env(&base_proxy_url);
-                    } else {
-                        env_set = env_set.with_auth_bypass(is_passthrough);
-                    }
-                    env_set
+                let env = if cli_mode.is_copilot() {
+                    crate::args::EnvSet::new()
+                        .with_copilot_env(&base_proxy_url, &session_token, "anthropic")
+                        .with_settings(app.settings_manager())
+                        .with_shim(_teammate_shim.as_ref())
+                        .build()
+                } else {
+                    crate::args::EnvSet::new()
+                        .with_proxy_url_for_mode(&base_proxy_url, proxy_env_var)
+                        .with_auth_bypass(is_passthrough)
                         .with_session_token(&session_token)
                         .with_settings(app.settings_manager())
                         .with_shim(_teammate_shim.as_ref())
@@ -636,6 +639,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                     cli_args,
                     Some(proxy_port),
                     is_passthrough,
+                    "anthropic",
                 );
                 respawn_pty(
                     &mut app,

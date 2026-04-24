@@ -82,21 +82,55 @@ impl EnvSet {
         self
     }
 
-    /// Inject all Copilot-mode env vars:
+    /// Inject all Copilot-mode env vars for **BYOK (Bring-Your-Own-Key)** operation.
     ///
-    /// * `COPILOT_API_URL` — already set by `with_proxy_url_for_mode`; this adds the rest.
-    /// * `ANTHROPIC_BASE_URL` — Copilot CLI's `sweagent-anthropic` agent reads
-    ///   `ANTHROPIC_BASE_URL` (not `COPILOT_API_URL`) for its Anthropic SDK calls.
-    ///   Pointing it at the same proxy lets us intercept those requests too.
-    /// * `ANTHROPIC_API_KEY` — Anthropic SDK requires a non-empty key even when
-    ///   using a custom base URL. A placeholder prevents "no API key" errors.
-    /// * `COPILOT_HOME` — isolates Copilot data from the system-wide installation.
-    pub fn with_copilot_env(mut self, proxy_url: &str) -> Self {
-        // Capture Anthropic-SDK-based traffic (sweagent-anthropic agent).
-        self.vars.push(("ANTHROPIC_BASE_URL".into(), proxy_url.into()));
-        // Placeholder so the Anthropic SDK doesn't refuse to start.
-        self.vars.push(("ANTHROPIC_API_KEY".into(), "anycode-copilot-proxy".into()));
-        // Isolate Copilot home directory.
+    /// GitHub Copilot CLI natively supports a BYOK / offline mode via the
+    /// `COPILOT_PROVIDER_*` environment variables. When `COPILOT_OFFLINE=true`
+    /// is set together with a `COPILOT_PROVIDER_BASE_URL`, the CLI:
+    ///
+    /// * **Skips the GitHub device-code OAuth flow entirely** — no login screen,
+    ///   no `github.com/login/device` prompt;
+    /// * Disables all GitHub network access (telemetry, web tools, GitHub MCP
+    ///   server, auto-update) — the CLI becomes a pure model client;
+    /// * Routes **every** model call to `COPILOT_PROVIDER_BASE_URL`, sending
+    ///   `Authorization: Bearer <COPILOT_PROVIDER_API_KEY>`.
+    ///
+    /// This is exactly the integration point anycode needs: point the provider
+    /// base URL at our proxy, hand it the session token, and the proxy then
+    /// forwards the request to the active backend (anthropic / openai / …) with
+    /// the backend's real credentials.
+    ///
+    /// Variables injected:
+    /// * `COPILOT_OFFLINE=true` — disables GitHub auth/telemetry.
+    /// * `COPILOT_PROVIDER_BASE_URL=<proxy>` — the anycode proxy's address.
+    /// * `COPILOT_PROVIDER_TYPE=<type>` — wire format ("anthropic" | "openai").
+    /// * `COPILOT_PROVIDER_API_KEY=<session_token>` — proxy authenticates the
+    ///   incoming request against this (also accepted as `Authorization: Bearer`
+    ///   by the proxy's auth middleware).
+    /// * `COPILOT_PROVIDER_WIRE_API=<wire>` — "completions" (default) or
+    ///   "responses". anycode always ships "completions".
+    /// * `COPILOT_HOME=<isolated dir>` — keeps Copilot CLI data out of the
+    ///   system-wide `~/.copilot` directory so BYOK sessions don't collide with
+    ///   an OAuth-authenticated installation.
+    ///
+    /// `provider_type` controls which wire format the CLI emits and thus which
+    /// proxy inbound endpoint it hits (`/v1/messages` for anthropic,
+    /// `/v1/chat/completions` for openai).
+    pub fn with_copilot_env(
+        mut self,
+        proxy_url: &str,
+        session_token: &str,
+        provider_type: &str,
+    ) -> Self {
+        self.vars.push(("COPILOT_OFFLINE".into(), "true".into()));
+        self.vars.push(("COPILOT_PROVIDER_BASE_URL".into(), proxy_url.into()));
+        self.vars.push(("COPILOT_PROVIDER_TYPE".into(), provider_type.into()));
+        self.vars.push(("COPILOT_PROVIDER_API_KEY".into(), session_token.into()));
+        self.vars.push(("COPILOT_PROVIDER_WIRE_API".into(), "completions".into()));
+
+        // Isolate Copilot home directory so BYOK-driven sessions don't share
+        // state (credentials, MCP config, session history) with an OAuth-logged-in
+        // Copilot installation on the same machine.
         if let Some(home) = dirs::home_dir() {
             let copilot_home = home.join(".config/anycode/copilot-home");
             self.vars.push(("COPILOT_HOME".into(), copilot_home.to_string_lossy().into_owned()));

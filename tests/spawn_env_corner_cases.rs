@@ -34,7 +34,7 @@ fn spawn_env_contains_provided_proxy_url() {
         None, // no shim
     
         None,
-    false);
+    false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -67,7 +67,7 @@ fn restart_env_contains_provided_proxy_url() {
         vec![], // no extra args
     
         None,
-    false);
+    false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -103,7 +103,7 @@ fn restart_merges_extra_env_preserves_proxy_url() {
         extra_env,
         vec![],
             None,
-false);
+false, "anthropic");
 
     // Verify ANTHROPIC_BASE_URL is present and correct
     let anthropic_url = params
@@ -179,7 +179,7 @@ fn shim_script_port_matches_spawn_env_port() {
         &ClaudeSettingsManager::new(),
         Some(&shim),
             None,
-false);
+false, "anthropic");
 
     // Verify env contains the proxy URL
     let anthropic_url = params
@@ -252,7 +252,8 @@ fn fallback_port_reflected_in_spawn_env() {
         None,
             None,
 false,
-);
+            "anthropic",
+        );
 
     let anthropic_url = params
         .env
@@ -291,7 +292,7 @@ fn restart_maintains_port_consistency_after_fallback() {
         vec![],
         vec![],
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -326,7 +327,7 @@ fn initial_and_resume_modes_both_have_proxy_url() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Resume mode (with --resume flag)
     let resume_args: Vec<String> = vec!["--resume".into(), "session123".into()];
@@ -339,7 +340,7 @@ false);
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Both should have the proxy URL
     let initial_url = initial_params
@@ -520,7 +521,7 @@ fn spawn_params_with_empty_args() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Should still have the proxy URL in env
     let anthropic_url = params
@@ -554,7 +555,7 @@ fn restart_params_with_empty_everything() {
         vec![], // empty extra args
     
         None,
-    false);
+    false, "anthropic");
 
     // Should still have the proxy URL in env
     let anthropic_url = params
@@ -585,7 +586,7 @@ fn spawn_env_preserves_localhost_url() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -615,7 +616,7 @@ fn spawn_env_preserves_ipv6_url() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -650,7 +651,7 @@ fn multiple_spawns_same_proxy_url() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
     let params2 = build_spawn_params(
         &args2,
         proxy_url,
@@ -660,7 +661,7 @@ false);
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let url1 = params1
         .env
@@ -693,7 +694,7 @@ fn spawn_then_restart_maintains_url() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     // Then restart
     let restart_args: Vec<String> = vec!["--resume".into(), spawn_params.session_id.clone()];
@@ -708,7 +709,7 @@ false);
         vec![],
         vec![],
             None,
-false);
+false, "anthropic");
 
     let spawn_url = spawn_params
         .env
@@ -746,7 +747,7 @@ fn spawn_env_preserves_trailing_slash() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -776,7 +777,7 @@ fn spawn_env_preserves_path() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env
@@ -806,7 +807,7 @@ fn spawn_env_preserves_https() {
         &ClaudeSettingsManager::new(),
         None,
             None,
-false);
+false, "anthropic");
 
     let anthropic_url = params
         .env

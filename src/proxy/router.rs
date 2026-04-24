@@ -100,11 +100,23 @@ async fn auth_middleware(
     }
 
     if let Some(ref expected_token) = state.session_token {
-        let session_header = req.headers()
+        // Accept either:
+        //   x-session-token: <token>            (Claude Code path, via ANTHROPIC_CUSTOM_HEADERS)
+        //   Authorization: Bearer <token>       (Copilot BYOK path; CLI has no
+        //                                        way to inject custom headers,
+        //                                        so it sends the provider API
+        //                                        key as a bearer token)
+        let headers = req.headers();
+        let session_header = headers
             .get("x-session-token")
             .and_then(|v| v.to_str().ok());
+        let bearer_header = headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer ")));
 
-        let valid = session_header.is_some_and(|t| t == expected_token);
+        let valid = session_header.is_some_and(|t| t == expected_token)
+            || bearer_header.is_some_and(|t| t == expected_token);
 
         if !valid {
             return Response::builder()

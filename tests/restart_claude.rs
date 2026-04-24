@@ -309,7 +309,7 @@ fn build_restart_params_with_empty_extras() {
         empty_env,
         empty_args,
             None,
-false);
+false, "anthropic");
 
     // Verify we got valid params even with empty extras
     assert!(

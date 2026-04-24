@@ -31,7 +31,8 @@ fn copilot_initial_spawn_has_no_session_id_flag() {
         None,
         Some(9999),
         false,
-    );
+            "anthropic",
+        );
     assert_eq!(p.command, "copilot");
     assert!(
         !p.args.iter().any(|a| a == "--session-id"),
@@ -81,7 +82,8 @@ fn claude_initial_still_injects_session_id() {
         None,
         Some(9999),
         true,
-    );
+            "anthropic",
+        );
     assert!(p.args.iter().any(|a| a == "--session-id"));
 }
 
