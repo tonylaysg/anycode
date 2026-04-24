@@ -640,3 +640,36 @@ model_haiku = "glm-4.5-air"
     assert_eq!(b.resolve_model("claude-haiku-4-5-20251001"), Some("glm-4.5-air"));
 }
 
+
+/// `wire_api` round-trips through TOML and falls back to `None` when omitted.
+#[test]
+fn test_backend_wire_api_roundtrip() {
+    let toml = r#"
+[[claude.backends]]
+name = "oai"
+display_name = "OAI"
+base_url = "https://oai.example.com"
+auth_type = "passthrough"
+wire_api = "openai"
+
+[[claude.backends]]
+name = "anth"
+display_name = "Anth"
+base_url = "https://api.anthropic.com"
+auth_type = "passthrough"
+
+[claude.defaults]
+active = "oai"
+"#;
+    let config: Config = toml::from_str(toml).expect("parse wire_api toml");
+    let oai = config.claude.backends.iter().find(|b| b.name == "oai").unwrap();
+    let anth = config.claude.backends.iter().find(|b| b.name == "anth").unwrap();
+    assert_eq!(oai.wire_api.as_deref(), Some("openai"));
+    assert_eq!(anth.wire_api, None);
+
+    // Serialize back and re-parse to verify round-trip fidelity.
+    let serialized = toml::to_string(&config).expect("serialize");
+    let reparsed: Config = toml::from_str(&serialized).expect("reparse");
+    let oai2 = reparsed.claude.backends.iter().find(|b| b.name == "oai").unwrap();
+    assert_eq!(oai2.wire_api.as_deref(), Some("openai"));
+}

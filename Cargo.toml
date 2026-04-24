@@ -8,7 +8,7 @@ unreachable_code = "deny"
 
 [package]
 name = "anycode"
-version = "0.5.5"
+version = "0.6.0"
 edition = "2021"
 
 [features]

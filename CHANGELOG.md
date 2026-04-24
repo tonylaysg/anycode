@@ -2,6 +2,16 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.0] - 2026-04-25
+
+### Features
+
+- **copilot**: first-class BYOK (bring-your-own-key) support for the GitHub Copilot CLI. `anycopilot` now injects `COPILOT_OFFLINE=true` + `COPILOT_PROVIDER_*` env vars so the upstream CLI skips the GitHub OAuth device flow entirely and speaks directly to anycode's proxy using the session-local Bearer token. No GitHub account or `gh auth login` required.
+- **proxy**: new `GET /v1/models` (and `/models`) endpoint. Aggregates the active backend's model list with a 30-minute in-memory cache keyed by `(backend.name, base_url)`; auto-probes `/v1/models` then `/models` when no explicit path is configured. Lets Copilot CLI's `/model` slash command and Claude Code's model picker discover all backend models dynamically. Configurable per backend via the new `models_path` field.
+- **proxy**: OpenAI-wire pass-through. `POST /v1/chat/completions` now flows through the same routing / model-rewrite / backend-forward pipeline as `/v1/messages`. The reverse-model-name SSE rewriter was extended to handle OpenAI `chat.completion.chunk` events so the client never sees the backend's raw model id. Enables pairing anycopilot with any OpenAI-compatible backend (DeepSeek, OpenRouter, LiteLLM, vLLM) via a single `wire_api = "openai"` knob.
+- **config**: new `Backend.wire_api` field (`"anthropic"` | `"openai"`, default Anthropic). Drives `COPILOT_PROVIDER_TYPE` at Copilot CLI launch. Exposed in the webui as a dropdown.
+- **proxy**: `Authorization: Bearer <session_token>` is now accepted by the middleware alongside the existing `x-session-token` header (required because Copilot CLI's `COPILOT_PROVIDER_API_KEY` is sent as Bearer).
+
 ## [0.5.5] - 2026-04-24
 
 ### Bug Fixes

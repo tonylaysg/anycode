@@ -61,6 +61,23 @@ anycopilot           # starts TUI with `copilot` embedded
 invoked name (`argv[0]`). They read separate `[claude]` / `[copilot]` profiles
 from `~/.config/anycode/config.toml`.
 
+> **Copilot BYOK mode (no GitHub login required).** `anycopilot` injects
+> `COPILOT_OFFLINE=true` and `COPILOT_PROVIDER_*` env vars so the upstream
+> Copilot CLI bypasses the GitHub OAuth device flow and talks directly to
+> anycode's local proxy. You only need a working backend (DeepSeek,
+> OpenRouter, Anthropic, etc.) — no `gh auth login`, no Copilot subscription.
+> Pick the wire protocol per backend in the WebUI (`wire_api`):
+>
+> * `anthropic` (default) — for Anthropic endpoints or OpenAI-compatible
+>   backends that accept the Anthropic `/v1/messages` shape.
+> * `openai` — for native OpenAI-compatible backends
+>   (`/v1/chat/completions`). Works with DeepSeek, OpenRouter, LiteLLM,
+>   vLLM, Ollama's OpenAI adapter, etc.
+>
+> The proxy also exposes `GET /v1/models` (auto-probes `/v1/models` →
+> `/models`; override per backend via `models_path`), so Copilot CLI's
+> `/model` slash command sees every model the active backend advertises.
+
 ### Commands
 
 ```
@@ -275,6 +292,22 @@ anycopilot           # 启动 TUI，内嵌 `copilot`
 
 `anycode` 和 `anycopilot` 是**同一个二进制**，根据调用名（`argv[0]`）选择模式，
 分别读取 `~/.config/anycode/config.toml` 中的 `[claude]` / `[copilot]` 两个独立配置段。
+
+> **Copilot BYOK 模式（无需 GitHub 登录）。** `anycopilot` 启动时注入
+> `COPILOT_OFFLINE=true` 和 `COPILOT_PROVIDER_*` 一组环境变量，让上游的
+> Copilot CLI 跳过 GitHub OAuth 设备授权流程，直接与本地 anycode 代理通信。
+> 你只需要一个可用的后端（DeepSeek、OpenRouter、Anthropic 等），完全不
+> 需要执行 `gh auth login`，也不需要 Copilot 订阅。在 WebUI 中按后端
+> 选择 `wire_api`：
+>
+> * `anthropic`（默认）—— Anthropic 官方端点，或能接受 Anthropic
+>   `/v1/messages` 形态的 OpenAI 兼容后端。
+> * `openai` —— 原生 OpenAI 兼容后端（`/v1/chat/completions`）。DeepSeek、
+>   OpenRouter、LiteLLM、vLLM、Ollama 的 OpenAI 适配器等均可。
+>
+> 代理同时暴露 `GET /v1/models`（自动探测 `/v1/models` → `/models`，
+> 可用 `models_path` 指定自定义路径），这样 Copilot CLI 的 `/model`
+> 斜杠命令就能看到后端公开的全部模型。
 
 ### 命令
 
