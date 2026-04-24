@@ -148,6 +148,30 @@ impl EnvSet {
             self.vars.push(("COPILOT_PROVIDER_WIRE_API".into(), w.into()));
         }
 
+        // Copilot CLI ≥1.0.35 refuses to start under BYOK unless a model is
+        // explicitly configured — it prints
+        //   "BYOK providers require an explicit model. Run `copilot help
+        //    providers` for configuration details."
+        // and exits within ~1s, before writing its own `process-*.log`.
+        //
+        // Copilot accepts any of `COPILOT_MODEL`, `COPILOT_PROVIDER_MODEL_ID`,
+        // or `--model <name>`. We honour the user's environment first: if any
+        // of the three are already set in the parent env, we don't override
+        // them. Otherwise we inject a sensible default whose family matches
+        // the active wire protocol, since anycode's proxy re-maps model names
+        // to the backend's configured `model_opus` / `model_sonnet` / …
+        // before forwarding.
+        let user_has_model = std::env::var_os("COPILOT_MODEL").is_some_and(|v| !v.is_empty())
+            || std::env::var_os("COPILOT_PROVIDER_MODEL_ID").is_some_and(|v| !v.is_empty());
+        if !user_has_model {
+            let default_model = match (ptype, wire) {
+                ("anthropic", _) => "claude-sonnet-4-5",
+                (_, Some("responses")) => "gpt-5",
+                _ => "gpt-4o",
+            };
+            self.vars.push(("COPILOT_MODEL".into(), default_model.into()));
+        }
+
         // Isolate Copilot home directory so BYOK-driven sessions don't share
         // state (credentials, MCP config, session history) with an OAuth-logged-in
         // Copilot installation on the same machine.

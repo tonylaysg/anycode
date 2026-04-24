@@ -2,6 +2,16 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.4] - 2026-04-24
+
+### Fixes
+
+- **anycopilot**: default `COPILOT_MODEL` injection so the Copilot CLI can launch under BYOK. Starting with Copilot CLI 1.0.35 the CLI refuses to boot without an explicit model and exits within ~1 s of spawn with `BYOK providers require an explicit model. Run copilot help providers for configuration details.` — before writing its own `process-*.log`, which made the failure look like a silent crash of anycopilot itself. anycode now injects a sensible default via the existing env pathway:
+  * `anthropic` wire → `COPILOT_MODEL=claude-sonnet-4-5`
+  * `openai-responses` wire → `COPILOT_MODEL=gpt-5`
+  * `openai` / `openai-completions` / `azure*` → `COPILOT_MODEL=gpt-4o`
+  The user's own `COPILOT_MODEL` / `COPILOT_PROVIDER_MODEL_ID` env vars (or an in-session `/model` switch) still take precedence. The model name is cosmetic for routing — anycode's proxy remaps it to the backend's configured `model_opus` / `model_sonnet` / `model_haiku` before forwarding.
+
 ## [0.6.3] - 2026-04-24
 
 ### Fixes
