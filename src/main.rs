@@ -165,12 +165,6 @@ fn list_running_instances() -> Vec<InstanceInfo> {
     instances
 }
 
-/// Backward-compat: returns true if the process is still running (same as is_process_running).
-#[allow(dead_code)]
-fn is_anycode_running(pid: u32) -> bool {
-    is_process_running(pid)
-}
-
 /// RAII guard that removes the PID file on drop.
 struct PidGuard(PathBuf);
 impl Drop for PidGuard {
@@ -691,6 +685,18 @@ fn run_main(run: RunArgs) -> io::Result<()> {
 
     // Write per-instance PID file so `anycode status` / `stop` can find this process.
     let cli_mode = CliMode::detect();
+
+    // Validate the active profile has at least one backend configured.
+    let profile = config.profile(cli_mode);
+    if profile.backends.is_empty() {
+        let _ = disable_raw_mode();
+        eprintln!("Error: No backends configured for {} profile.", cli_mode.binary());
+        eprintln!();
+        eprintln!("Add a backend to ~/.config/anycode/config.toml under [[{}.backends]]", cli_mode.profile_key());
+        eprintln!("or open the WebUI (anycode webui) to configure backends.");
+        std::process::exit(1);
+    }
+
     let my_pid = std::process::id();
     let pid_path = instance_pid_file(my_pid);
     let _ = write_instance_pid(my_pid, cli_mode.binary());

@@ -137,9 +137,11 @@ main() {
         install_from_source; installed_via="source"
     fi
 
-    # ── 创建 anycopilot 符号链接（Copilot CLI 模式）───────────────────────────
+    # ── 创建 anycopilot 符号链接（Copilot CLI 模式，幂等）────────────────────────
     ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/anycopilot"
-    success "已创建符号链接: ${INSTALL_DIR}/anycopilot → ${BINARY}"
+    if [ -L "${INSTALL_DIR}/anycopilot" ]; then
+        success "符号链接就绪: ${INSTALL_DIR}/anycopilot → ${BINARY}"
+    fi
 
     # ── 更新模式：跳过配置向导，直接显示完成摘要 ──────────────────────────────
     if $is_update; then

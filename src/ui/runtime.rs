@@ -62,8 +62,15 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
     let base_proxy_url = config_store.get().proxy.base_url.clone();
 
     // Generate session token for proxy authentication.
-    // This token is injected via ANTHROPIC_CUSTOM_HEADERS and validated by the proxy.
-    let session_token = Uuid::new_v4().to_string();
+    // Claude Code honors ANTHROPIC_CUSTOM_HEADERS to inject x-session-token on every
+    // request, so the proxy can validate requests come from its own spawned child.
+    // Copilot CLI does NOT read ANTHROPIC_CUSTOM_HEADERS, so we skip session token
+    // auth for Copilot mode (proxy is bound to 127.0.0.1 which is sufficient isolation).
+    let session_token = if cli_mode.is_claude() {
+        Uuid::new_v4().to_string()
+    } else {
+        String::new() // empty → ProxyServer treats as no auth required
+    };
 
     // Build spawn parameters FIRST to get session_id before creating logger.
     // This prevents a race condition where logs are written to the wrong file.
@@ -125,8 +132,12 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
     app.set_session_id(current_session_id.clone());
     app.set_ipc_sender(ui_command_tx.clone());
 
-    let mut proxy_server = ProxyServer::new(config_store.clone(), cli_mode, debug_logger.clone(), Some(session_token.clone()))
-        .map_err(|err| io::Error::other(err.to_string()))?;
+    let mut proxy_server = ProxyServer::new(
+        config_store.clone(),
+        cli_mode,
+        debug_logger.clone(),
+        if session_token.is_empty() { None } else { Some(session_token.clone()) },
+    ).map_err(|err| io::Error::other(err.to_string()))?;
 
     // Try to bind and get the actual port, updating the base URL.
     // NOTE: try_bind may bind to a different port than specified in config
