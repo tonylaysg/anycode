@@ -86,11 +86,19 @@ impl RouterEngine {
 /// Auth middleware — validates session token for proxy requests.
 ///
 /// Rejects requests without valid x-session-token header when session_token is configured.
+/// Exempted paths (no session token required):
+///   /models — Copilot CLI calls this with its own auth headers, not our session token.
 async fn auth_middleware(
     State(state): State<RouterEngine>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
+    // /models is called by Copilot CLI before our session token is established.
+    // It carries the backend's own auth header; forward it directly.
+    if req.uri().path() == "/models" {
+        return next.run(req).await;
+    }
+
     if let Some(ref expected_token) = state.session_token {
         let session_header = req.headers()
             .get("x-session-token")
@@ -111,7 +119,8 @@ async fn auth_middleware(
 pub fn build_router(
     engine: RouterEngine,
 ) -> Router {
-    // Main pipeline: auth middleware only (thinking is handled inside the pipeline)
+    // Main pipeline: auth middleware (session token) + transparent proxy.
+    // /models is exempted from session token auth so Copilot CLI can discover models.
     let main = Router::new()
         .fallback(proxy_handler)
         .layer(axum::middleware::from_fn_with_state(
