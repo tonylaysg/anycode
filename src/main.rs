@@ -335,9 +335,34 @@ fn cmd_uninstall(purge: bool, yes: bool) -> io::Result<()> {
     }
 
     let binary_path = std::env::current_exe()?;
-    if binary_path.exists() {
-        std::fs::remove_file(&binary_path)?;
-        println!("✓ 已删除二进制: {}", binary_path.display());
+    // Resolve to the real binary (in case we were invoked via a symlink like `anycopilot`).
+    let real_binary = std::fs::canonicalize(&binary_path).unwrap_or_else(|_| binary_path.clone());
+
+    // Clean up companion symlinks / legacy binaries in the same directory so we
+    // don't leave dangling links (e.g. anycopilot → deleted anycode) behind.
+    if let Some(install_dir) = real_binary.parent() {
+        for companion in ["anycopilot", "anyclaude"] {
+            let path = install_dir.join(companion);
+            // Only remove when it's a symlink pointing at our binary, or matches
+            // the legacy pre-rename `anyclaude` binary name.
+            let is_link = std::fs::symlink_metadata(&path)
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false);
+            let points_at_us = is_link
+                && std::fs::canonicalize(&path)
+                    .map(|t| t == real_binary)
+                    .unwrap_or(false);
+            if points_at_us || (companion == "anyclaude" && path.exists()) {
+                if std::fs::remove_file(&path).is_ok() {
+                    println!("✓ 已删除: {}", path.display());
+                }
+            }
+        }
+    }
+
+    if real_binary.exists() {
+        std::fs::remove_file(&real_binary)?;
+        println!("✓ 已删除二进制: {}", real_binary.display());
     }
 
     // Clean up any stale instance PID files
