@@ -81,9 +81,18 @@ impl AlacrittyEmulator {
             ..Config::default()
         };
 
+        // `alacritty_terminal::Term::new` panics with
+        // `index out of bounds: the len is 0 but the index is usize::MAX`
+        // when rows=0 or cols=0 (the grid storage underflows on the first
+        // resize). Some terminal environments report a 0×0 size before the
+        // WINCH is delivered — most notably fresh `pty.fork()` children and
+        // certain SSH clients / tmux nested sessions — and `crossterm`
+        // forwards that Ok((0,0)) through our `.unwrap_or((80,24))` guard.
+        // Enforce a 1×1 floor so the emulator can always initialize; a real
+        // size will arrive via the ResizeWatcher moments later.
         let size = TermSize {
-            lines: rows as usize,
-            cols: cols as usize,
+            lines: (rows as usize).max(1),
+            cols: (cols as usize).max(1),
         };
 
         let clipboard_events: ClipboardEvents = Arc::new(Mutex::new(Vec::new()));
@@ -116,8 +125,8 @@ impl TerminalEmulator for AlacrittyEmulator {
 
     fn set_size(&mut self, rows: u16, cols: u16) {
         let size = TermSize {
-            lines: rows as usize,
-            cols: cols as usize,
+            lines: (rows as usize).max(1),
+            cols: (cols as usize).max(1),
         };
         self.term.resize(size);
     }

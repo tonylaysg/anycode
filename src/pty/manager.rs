@@ -23,6 +23,7 @@ impl Default for PtyManager {
 impl PtyManager {
     pub fn new() -> Self {
         let (cols, rows) = terminal_size().unwrap_or((80, 24));
+        let (cols, rows) = (cols.max(1), rows.max(1));
         Self {
             emulator: Arc::new(Mutex::new(emulator::create(rows, cols, 0))),
         }
@@ -35,6 +36,7 @@ impl PtyManager {
     ) -> Result<(), Box<dyn Error>> {
         let pty_system = native_pty_system();
         let (cols, rows) = terminal_size().unwrap_or((80, 24));
+        let (cols, rows) = (cols.max(1), rows.max(1));
         let pair = pty_system.openpty(PtySize {
             rows,
             cols,

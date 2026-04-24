@@ -2,6 +2,12 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.5.4] - 2026-04-24
+
+### Bug Fixes
+
+- **pty**: `anycopilot` / `anycode` panicked at startup with `index out of bounds: the len is 0 but the index is 18446744073709551615` when the host terminal reported a 0×0 initial size. `alacritty_terminal::Term::new` underflows its grid storage on zero dimensions. Reproducible under fresh `pty.fork()` children, certain SSH clients, and nested tmux sessions where the WINCH that carries the real size has not yet been delivered by the time we construct the emulator. Added a 1×1 floor in all four PTY init/resize sites (`AlacrittyEmulator::new`, `AlacrittyEmulator::set_size`, `PtyManager::{new,run_command}`, `PtySession::new`) and skip bogus 0×0 SIGWINCH events in `ResizeWatcher`. Added regression tests in `tests/pty_emulator_zero_size.rs`.
+
 ## [0.5.3] - 2026-04-24
 
 ### Features

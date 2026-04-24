@@ -26,6 +26,11 @@ impl PtySession {
     ) -> Result<Self, Box<dyn Error>> {
         let pty_system = native_pty_system();
         let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+        // Defensive: some terminal envs (fresh pty.fork children, certain SSH
+        // clients) report (0, 0) which Ok-wraps through unwrap_or and later
+        // panics `alacritty_terminal::Term::new`. Enforce a 1×1 floor —
+        // real size arrives via ResizeWatcher moments later.
+        let (cols, rows) = (cols.max(1), rows.max(1));
         let pair = pty_system.openpty(PtySize {
             rows,
             cols,

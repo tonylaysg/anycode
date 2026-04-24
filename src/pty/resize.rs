@@ -34,6 +34,12 @@ impl ResizeWatcher {
                         Ok(size) => size,
                         Err(_) => continue,
                     };
+                    // Skip bogus 0×0 SIGWINCH events (some terminals briefly
+                    // report 0 during resize). `alacritty_terminal` grid math
+                    // will underflow on 0 sizes.
+                    if cols == 0 || rows == 0 {
+                        continue;
+                    }
                     let size = PtySize {
                         rows,
                         cols,
