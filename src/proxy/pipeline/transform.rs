@@ -99,28 +99,46 @@ pub fn transform_body(
     if let Some(session) = thinking {
         filtered_count = session.filter(&mut json_body);
 
-        // Strip the top-level `thinking` parameter when thinking blocks are absent
-        // from a multi-turn conversation. Without this, Anthropic-compatible backends
-        // (e.g. DeepSeek) return 400: "content[].thinking must be passed back to the API".
+        // When any thinking block was filtered, the conversation history is now
+        // inconsistent: some assistant turns have their thinking blocks, others
+        // don't. Anthropic-compatible backends (e.g. DeepSeek) enforce that
+        // `thinking: enabled` requires EVERY assistant message to include its
+        // thinking block and will 400 with
+        // "content[].thinking ... must be passed back to the API" otherwise.
         //
-        // Guard: only strip when assistant messages exist. On the very first turn there
-        // are no assistant messages yet, so `thinking` must be kept for the backend to
-        // start generating thinking blocks.
-        if !has_remaining_thinking_blocks(&json_body) && has_assistant_messages(&json_body) {
-            if json_body.as_object_mut().is_some_and(|obj| obj.remove("thinking").is_some()) {
+        // Safety rule: if we had to remove even one invalid block, treat the
+        // entire history as inconsistent and strip ALL remaining thinking
+        // blocks + the top-level `thinking` field. This is the only reliable
+        // way to avoid the 400, because we cannot fabricate the missing blocks.
+        //
+        // Guard: only strip when assistant messages exist. On the very first
+        // turn there are no assistant messages yet, so `thinking` must be kept
+        // for the backend to start generating thinking blocks.
+        let has_assistant = has_assistant_messages(&json_body);
+        let should_strip_all =
+            has_assistant && (filtered_count > 0 || !has_remaining_thinking_blocks(&json_body));
+
+        if should_strip_all {
+            let extra_stripped = strip_all_thinking_blocks(&mut json_body);
+            let removed_top_level = json_body
+                .as_object_mut()
+                .is_some_and(|obj| obj.remove("thinking").is_some());
+
+            if removed_top_level || extra_stripped > 0 {
                 thinking_converted = false;
                 ctx.debug_logger.log_auxiliary(
                     "thinking_filter",
                     None,
                     None,
                     Some(&format!(
-                        "Removed 'thinking' field: {} block(s) stripped, no thinking blocks \
-                         remain in conversation (backend '{}')",
-                        filtered_count, backend.name
+                        "Stripped thinking for consistency: filtered={} extra_stripped={} \
+                         removed_top_level={} (backend '{}')",
+                        filtered_count, extra_stripped, removed_top_level, backend.name
                     )),
                     None,
                 );
             }
+            filtered_count = filtered_count.saturating_add(extra_stripped);
         }
     }
 
@@ -182,6 +200,35 @@ pub fn transform_body(
     } else {
         Ok((body_bytes, is_streaming_request, model_mapping, thinking_active))
     }
+}
+
+/// Strip every `thinking` / `redacted_thinking` content block from every message.
+///
+/// Returns the number of blocks removed.
+///
+/// Used as a "nuclear" cleanup when the conversation history is known to be
+/// inconsistent (e.g. some blocks were filtered due to invalid signatures or
+/// backend switches). Sending a partial thinking history triggers a 400 on
+/// strict backends; stripping everything is the only safe repair.
+fn strip_all_thinking_blocks(body: &mut Value) -> u32 {
+    let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) else {
+        return 0;
+    };
+    let mut removed = 0u32;
+    for message in messages.iter_mut() {
+        let Some(content) = message.get_mut("content").and_then(|v| v.as_array_mut()) else {
+            continue;
+        };
+        let before = content.len();
+        content.retain(|item| {
+            !matches!(
+                item.get("type").and_then(|t| t.as_str()),
+                Some("thinking") | Some("redacted_thinking")
+            )
+        });
+        removed += (before - content.len()) as u32;
+    }
+    removed
 }
 
 /// Returns `true` if the request body still contains thinking or redacted_thinking blocks.
