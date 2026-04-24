@@ -281,9 +281,23 @@ pub struct Backend {
     /// Optional pricing per million tokens.
     #[serde(default)]
     pub pricing: Option<BackendPricing>,
-    /// Convert adaptive thinking to standard "enabled" format.
-    /// None = auto-detect (true for non-Anthropic backends).
-    /// true = always convert, false = never convert.
+    /// Controls whether to convert Anthropic's `thinking: {type: "adaptive"}`
+    /// into the standard `thinking: {type: "enabled", budget_tokens: N}` format
+    /// expected by non-Anthropic backends.
+    ///
+    /// **This is a request-format compatibility flag, NOT an on/off toggle for
+    /// the thinking feature itself.** Thinking is enabled/disabled by Claude
+    /// Code (the upstream client) per request; anycode only reshapes the
+    /// already-present thinking payload so the downstream backend can accept it.
+    ///
+    /// Values:
+    /// - `None` (default, recommended) — auto-detect: convert for any backend
+    ///   whose `base_url` is not on `anthropic.com`. Works out of the box for
+    ///   DeepSeek, OpenRouter, OpenAI-compatible gateways, etc.
+    /// - `Some(true)` — force conversion on (use when auto-detect is wrong,
+    ///   e.g., a proxy that hosts Anthropic-format but doesn't support adaptive).
+    /// - `Some(false)` — force conversion off (use for a genuine Anthropic-API
+    ///   compatible backend accessed via a non-anthropic.com URL).
     #[serde(default)]
     pub thinking_compat: Option<bool>,
     /// Budget tokens when converting adaptive → enabled thinking.

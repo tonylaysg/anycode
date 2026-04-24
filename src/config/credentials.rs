@@ -119,9 +119,19 @@ impl Backend {
 
     /// Whether to convert adaptive thinking to standard "enabled" format.
     ///
-    /// Only enabled when explicitly set to `true` in config. Default: false.
+    /// Returns:
+    /// - `Some(true)` → always convert (force on)
+    /// - `Some(false)` → never convert (force off)
+    /// - `None` → auto-detect: `true` for non-Anthropic backends, `false` for
+    ///   Anthropic's own API (`api.anthropic.com`). This is the recommended default
+    ///   because backends like DeepSeek / OpenRouter do not accept
+    ///   `{"type":"adaptive"}` and return 400.
     pub fn needs_thinking_compat(&self) -> bool {
-        self.thinking_compat.unwrap_or(false)
+        if let Some(v) = self.thinking_compat {
+            return v;
+        }
+        // Auto-detect: anthropic.com hosts accept adaptive; all others need conversion.
+        !self.base_url.contains("anthropic.com")
     }
 
     /// Resolve model ID via family-based mapping.
