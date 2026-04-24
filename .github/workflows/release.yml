@@ -16,12 +16,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux: use musl targets for fully-static binaries that run on any
+          # glibc version (Debian 10+, Ubuntu 18.04+, RHEL/CentOS 7+, Alpine).
+          # Building with glibc on `ubuntu-latest` produces binaries that
+          # require the runner's newest glibc (2.39 on ubuntu-24.04) and
+          # fail on older systems.
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
             asset_name: anycode-linux-x86_64
+            cross: true
 
           - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-musl
             asset_name: anycode-linux-aarch64
             cross: true
 
@@ -41,7 +47,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (aarch64 Linux)
+      - name: Install cross (Linux)
         if: matrix.cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 

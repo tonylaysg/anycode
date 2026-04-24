@@ -15,6 +15,7 @@ All notable changes to anycode are documented in this file.
 ### CI / Release
 
 - **release.yml**: fix binary name after the `anyclaude` → `anycode` rename (the `cp` step was still referencing the old name, which would have broken every tag-triggered release)
+- **release.yml**: switch Linux targets to `*-unknown-linux-musl` (fully-static) so prebuilt binaries run on any glibc version (Ubuntu 22.04 / Debian 12 / RHEL 9 and older). Previous glibc build on `ubuntu-latest` required GLIBC 2.38+ and failed on most user systems.
 - **install.sh**: point at the `tonylaysg/anycode` repo so prebuilt assets are downloaded directly instead of silently falling back to source compilation
 
 ### Documentation
