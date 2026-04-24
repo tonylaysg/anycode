@@ -42,6 +42,8 @@ pub struct BackendDto {
     #[serde(default)]
     pub model_haiku: Option<String>,
     #[serde(default)]
+    pub max_effort: Option<String>,
+    #[serde(default)]
     pub pricing: Option<BackendPricing>,
 }
 
@@ -72,6 +74,7 @@ fn config_to_dto(config: &Config) -> ConfigDto {
             model_opus: b.model_opus.clone(),
             model_sonnet: b.model_sonnet.clone(),
             model_haiku: b.model_haiku.clone(),
+            max_effort: b.max_effort.clone(),
             pricing: b.pricing.clone(),
         }).collect(),
         agents: config.claude.agents.clone(),
@@ -103,6 +106,7 @@ fn dto_to_backend(
         model_opus: dto.model_opus.clone(),
         model_sonnet: dto.model_sonnet.clone(),
         model_haiku: dto.model_haiku.clone(),
+        max_effort: dto.max_effort.clone(),
         pricing: dto.pricing.clone(),
     }
 }
@@ -194,6 +198,7 @@ pub async fn get_backend(
                 model_opus: b.model_opus.clone(),
                 model_sonnet: b.model_sonnet.clone(),
                 model_haiku: b.model_haiku.clone(),
+                max_effort: b.max_effort.clone(),
                 pricing: b.pricing.clone(),
             };
             Json(dto).into_response()

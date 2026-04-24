@@ -141,4 +141,28 @@ impl Backend {
         }
     }
 
+    /// Cap `output_config.effort` to the backend's configured max.
+    ///
+    /// Returns `Some(&str)` with the capped effort value when the request effort
+    /// exceeds `max_effort`. Returns `None` when no cap is needed.
+    pub fn cap_effort<'a>(&self, request_effort: &'a str) -> Option<&str> {
+        let max = self.max_effort.as_deref()?;
+        if effort_rank(request_effort) > effort_rank(max) {
+            Some(max)
+        } else {
+            None
+        }
+    }
+
+}
+
+/// Ordinal rank for effort levels (higher = more compute).
+fn effort_rank(effort: &str) -> u8 {
+    match effort {
+        "low"    => 0,
+        "medium" => 1,
+        "high"   => 2,
+        "xhigh"  => 3,
+        _        => 0,
+    }
 }

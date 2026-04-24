@@ -299,6 +299,12 @@ pub struct Backend {
     /// Model name to use for haiku-family requests on this backend.
     #[serde(default)]
     pub model_haiku: Option<String>,
+    /// Maximum allowed value for `output_config.effort`.
+    /// When set, any effort value higher than this will be capped.
+    /// Valid values: "low", "medium", "high", "xhigh".
+    /// Example: `max_effort = "medium"` prevents "high"/"xhigh" from being forwarded.
+    #[serde(default)]
+    pub max_effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,6 +339,7 @@ impl Default for Backend {
             model_opus: None,
             model_sonnet: None,
             model_haiku: None,
+            max_effort: None,
         }
     }
 }

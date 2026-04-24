@@ -43,6 +43,7 @@ pub fn transform_body(
     let mut model_rewritten = false;
     let mut thinking_converted = false;
     let mut filtered_count = 0u32;
+    let mut effort_capped = false;
 
     // 1. Rewrite model field via family-based mapping
     if let Some(model_val) = json_body.get("model").and_then(|m| m.as_str()) {
@@ -92,8 +93,29 @@ pub fn transform_body(
         filtered_count = session.filter(&mut json_body);
     }
 
+    // 4. Cap output_config.effort when backend has max_effort configured
+    if let Some(output_config) = json_body.get("output_config").and_then(|v| v.as_object()) {
+        if let Some(effort_str) = output_config.get("effort").and_then(|v| v.as_str()) {
+            if let Some(capped) = backend.cap_effort(effort_str) {
+                ctx.debug_logger.log_auxiliary(
+                    "effort_cap",
+                    None,
+                    None,
+                    Some(&format!(
+                        "Capped output_config.effort '{}' -> '{}' for backend '{}'",
+                        effort_str, capped, backend.name
+                    )),
+                    None,
+                );
+                let capped_owned = capped.to_string();
+                json_body["output_config"]["effort"] = serde_json::json!(capped_owned);
+                effort_capped = true;
+            }
+        }
+    }
+
     // Re-serialize body if any transformation occurred
-    if model_rewritten || thinking_converted || filtered_count > 0 {
+    if model_rewritten || thinking_converted || filtered_count > 0 || effort_capped {
         if thinking_converted {
             let thinking_json = json_body
                 .get("thinking")
