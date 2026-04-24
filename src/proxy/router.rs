@@ -85,20 +85,15 @@ impl RouterEngine {
 
 /// Auth middleware — validates session token for proxy requests.
 ///
-/// Rejects requests without valid x-session-token header when session_token is configured.
-/// Exempted paths (no session token required):
-///   /models — Copilot CLI calls this with its own auth headers, not our session token.
+/// Rejects requests without a valid session token when one is configured.
+/// Accepts either `x-session-token: <token>` (Claude Code via
+/// `ANTHROPIC_CUSTOM_HEADERS`) or `Authorization: Bearer <token>` (Copilot
+/// BYOK — see `src/args/env_builder.rs::with_copilot_env`).
 async fn auth_middleware(
     State(state): State<RouterEngine>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
-    // /models is called by Copilot CLI before our session token is established.
-    // It carries the backend's own auth header; forward it directly.
-    if req.uri().path() == "/models" {
-        return next.run(req).await;
-    }
-
     if let Some(ref expected_token) = state.session_token {
         // Accept either:
         //   x-session-token: <token>            (Claude Code path, via ANTHROPIC_CUSTOM_HEADERS)
@@ -134,6 +129,12 @@ pub fn build_router(
     // Main pipeline: auth middleware (session token) + transparent proxy.
     // /models is exempted from session token auth so Copilot CLI can discover models.
     let main = Router::new()
+        // Explicit models endpoint — see src/proxy/models.rs. Handles backend
+        // path probing (`/v1/models` → fallback `/models`) and 30-min caching.
+        // Registered before the fallback so Copilot CLI's BYOK model discovery
+        // (`GET /v1/models`) is served by us, not forwarded raw.
+        .route("/v1/models", get(crate::proxy::models::handle_list_models))
+        .route("/models", get(crate::proxy::models::handle_list_models))
         .fallback(proxy_handler)
         .layer(axum::middleware::from_fn_with_state(
             engine.clone(),

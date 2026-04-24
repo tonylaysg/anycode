@@ -57,6 +57,7 @@ fn test_credential_resolution_passthrough() {
         model_opus: None, model_opus_max_effort: None,
         model_sonnet: None, model_sonnet_max_effort: None,
         model_haiku: None, model_haiku_max_effort: None,
+        models_path: None,
     };
 
     assert!(matches!(

@@ -35,6 +35,7 @@ fn create_backend(name: &str, base_url: &str) -> Backend {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         }
 }
 

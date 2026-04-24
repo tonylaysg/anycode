@@ -185,6 +185,7 @@ fn test_backend_is_configured_with_api_key() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         };
 
     assert!(backend.is_configured());
@@ -208,6 +209,7 @@ fn test_backend_not_configured_without_api_key() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         };
 
     assert!(!backend.is_configured());
@@ -231,6 +233,7 @@ fn test_backend_passthrough_always_configured() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         };
 
     assert!(backend.is_configured());
@@ -258,6 +261,7 @@ fn test_build_auth_header_api_key() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         };
 
     let header = build_auth_header(&backend);
@@ -286,6 +290,7 @@ fn test_build_auth_header_bearer() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         };
 
     let header = build_auth_header(&backend);
@@ -331,6 +336,7 @@ fn test_validation_fails_unconfigured_active_backend() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         }],
         agents: None,
     ..Default::default()
@@ -477,6 +483,7 @@ fn test_configured_backends_filters_correctly() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         },
             Backend {
                 name: "unconfigured".to_string(),
@@ -493,6 +500,7 @@ fn test_configured_backends_filters_correctly() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         },
             Backend {
                 name: "passthrough".to_string(),
@@ -509,6 +517,7 @@ fn test_configured_backends_filters_correctly() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         },
         ],
         agents: None,
@@ -547,6 +556,7 @@ fn glm_backend() -> Backend {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         }
 }
 

@@ -322,6 +322,16 @@ pub struct Backend {
     /// Max effort cap for haiku-family requests.
     #[serde(default)]
     pub model_haiku_max_effort: Option<String>,
+    /// Upstream path for the `GET /v1/models` listing.
+    ///
+    /// When `None` (default) the proxy auto-probes `/v1/models` first and
+    /// falls back to `/models` on 404 — the result is cached for the lifetime
+    /// of the running proxy (until the next backend switch / config reload).
+    ///
+    /// Set explicitly when a backend exposes the list at a non-standard
+    /// path (e.g. `/api/models`, `/openai/v1/models`). Must start with `/`.
+    #[serde(default)]
+    pub models_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,6 +369,7 @@ impl Default for Backend {
             model_sonnet_max_effort: None,
             model_haiku: None,
             model_haiku_max_effort: None,
+            models_path: None,
         }
     }
 }

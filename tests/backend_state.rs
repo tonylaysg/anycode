@@ -38,6 +38,7 @@ fn create_test_config() -> Config {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         },
             Backend {
                 name: "backend2".to_string(),
@@ -54,6 +55,7 @@ fn create_test_config() -> Config {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         },
         ],
         agents: None,
@@ -207,6 +209,7 @@ fn test_update_config() {
             model_opus_max_effort: None,
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
+            models_path: None,
         });
 
     state.update_config(new_config.claude.clone()).unwrap();

@@ -282,6 +282,12 @@ impl BackendState {
         // Perform the atomic switch
         let old_backend = state.active_backend.clone();
         state.active_backend = backend_id.to_string();
+        drop(state);
+
+        // Invalidate the /v1/models response cache so the next model-list
+        // request reflects the newly-active backend, not a stale copy from
+        // the previous one.
+        crate::proxy::models::invalidate_cache();
 
         // Log at info level for visibility
         crate::metrics::app_log("backend", &format!("Backend switched: {} -> {}", old_backend, backend_id));
