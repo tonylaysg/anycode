@@ -137,12 +137,42 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
         <input id="f-opus" placeholder="如: provider-large（可选）">
       </div>
       <div class="field">
+        <label>Opus 最大 Effort</label>
+        <select id="f-opus-effort">
+          <option value="">不限制</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+        </select>
+      </div>
+      <div class="field">
         <label>模型映射 — Sonnet</label>
         <input id="f-sonnet" placeholder="如: provider-medium（可选）">
       </div>
       <div class="field">
+        <label>Sonnet 最大 Effort</label>
+        <select id="f-sonnet-effort">
+          <option value="">不限制</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+        </select>
+      </div>
+      <div class="field">
         <label>模型映射 — Haiku</label>
         <input id="f-haiku" placeholder="如: provider-small（可选）">
+      </div>
+      <div class="field">
+        <label>Haiku 最大 Effort</label>
+        <select id="f-haiku-effort">
+          <option value="">不限制</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+        </select>
       </div>
       <div class="field">
         <label>Thinking 兼容</label>
@@ -150,16 +180,6 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
           <option value="">自动（非 Anthropic 启用）</option>
           <option value="true">强制开启</option>
           <option value="false">强制关闭</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>最大 Effort（输出质量上限）</label>
-        <select id="f-max-effort">
-          <option value="">不限制（后端支持的最高等级）</option>
-          <option value="low">low（最低）</option>
-          <option value="medium">medium（中等）</option>
-          <option value="high">high（高）</option>
-          <option value="xhigh">xhigh（最高）</option>
         </select>
       </div>
     </div>
@@ -283,7 +303,9 @@ function openAddBackend() {
   });
   document.getElementById('f-auth').value = 'passthrough';
   document.getElementById('f-thinking').value = '';
-  document.getElementById('f-max-effort').value = '';
+  ['opus-effort','sonnet-effort','haiku-effort'].forEach(id => {
+    document.getElementById('f-' + id).value = '';
+  });
   document.getElementById('f-name').disabled = false;
   document.getElementById('backend-modal').classList.add('open');
 }
@@ -301,10 +323,12 @@ function openEditBackend(name) {
   document.getElementById('f-auth').value = b.auth_type;
   document.getElementById('f-key').value = '';
   document.getElementById('f-opus').value = b.model_opus || '';
+  document.getElementById('f-opus-effort').value = b.model_opus_max_effort || '';
   document.getElementById('f-sonnet').value = b.model_sonnet || '';
+  document.getElementById('f-sonnet-effort').value = b.model_sonnet_max_effort || '';
   document.getElementById('f-haiku').value = b.model_haiku || '';
+  document.getElementById('f-haiku-effort').value = b.model_haiku_max_effort || '';
   document.getElementById('f-thinking').value = b.thinking_compat === true ? 'true' : b.thinking_compat === false ? 'false' : '';
-  document.getElementById('f-max-effort').value = b.max_effort || '';
   document.getElementById('backend-modal').classList.add('open');
 }
 
@@ -319,10 +343,12 @@ async function saveBackend() {
   const auth = document.getElementById('f-auth').value;
   const key = document.getElementById('f-key').value;
   const opus = document.getElementById('f-opus').value.trim();
+  const opusEffort = document.getElementById('f-opus-effort').value;
   const sonnet = document.getElementById('f-sonnet').value.trim();
+  const sonnetEffort = document.getElementById('f-sonnet-effort').value;
   const haiku = document.getElementById('f-haiku').value.trim();
+  const haikuEffort = document.getElementById('f-haiku-effort').value;
   const thinkingVal = document.getElementById('f-thinking').value;
-  const maxEffortVal = document.getElementById('f-max-effort').value;
 
   if (!name || !display || !url) {
     document.getElementById('modal-alert').innerHTML = '<div class="alert error">名称、显示名称和 URL 为必填项</div>';
@@ -339,11 +365,13 @@ async function saveBackend() {
     api_key_input: key || null,
     api_key_set: false,
     model_opus: opus || null,
+    model_opus_max_effort: opusEffort || null,
     model_sonnet: sonnet || null,
+    model_sonnet_max_effort: sonnetEffort || null,
     model_haiku: haiku || null,
+    model_haiku_max_effort: haikuEffort || null,
     thinking_compat,
     thinking_budget_tokens: null,
-    max_effort: maxEffortVal || null,
     pricing: null,
   };
 

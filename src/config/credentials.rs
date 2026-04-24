@@ -141,12 +141,21 @@ impl Backend {
         }
     }
 
-    /// Cap `output_config.effort` to the backend's configured max.
+    /// Cap `output_config.effort` to the per-model configured max.
     ///
-    /// Returns `Some(&str)` with the capped effort value when the request effort
-    /// exceeds `max_effort`. Returns `None` when no cap is needed.
-    pub fn cap_effort<'a>(&self, request_effort: &'a str) -> Option<&str> {
-        let max = self.max_effort.as_deref()?;
+    /// `original_model` is the model name from the request (before rewriting).
+    /// Returns `Some(capped)` when the effort exceeds the limit, `None` otherwise.
+    pub fn cap_effort<'a>(&self, request_effort: &'a str, original_model: &str) -> Option<&str> {
+        let max = if original_model.contains("opus") {
+            self.model_opus_max_effort.as_deref()
+        } else if original_model.contains("sonnet") {
+            self.model_sonnet_max_effort.as_deref()
+        } else if original_model.contains("haiku") {
+            self.model_haiku_max_effort.as_deref()
+        } else {
+            None
+        }?;
+
         if effort_rank(request_effort) > effort_rank(max) {
             Some(max)
         } else {

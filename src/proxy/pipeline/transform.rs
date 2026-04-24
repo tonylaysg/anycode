@@ -45,6 +45,13 @@ pub fn transform_body(
     let mut filtered_count = 0u32;
     let mut effort_capped = false;
 
+    // Remember original model name for per-model effort cap (before rewriting)
+    let original_model = json_body
+        .get("model")
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
+
     // 1. Rewrite model field via family-based mapping
     if let Some(model_val) = json_body.get("model").and_then(|m| m.as_str()) {
         if let Some(new_model) = backend.resolve_model(model_val) {
@@ -93,10 +100,10 @@ pub fn transform_body(
         filtered_count = session.filter(&mut json_body);
     }
 
-    // 4. Cap output_config.effort when backend has max_effort configured
+    // 4. Cap output_config.effort per model family
     if let Some(output_config) = json_body.get("output_config").and_then(|v| v.as_object()) {
         if let Some(effort_str) = output_config.get("effort").and_then(|v| v.as_str()) {
-            if let Some(capped) = backend.cap_effort(effort_str) {
+            if let Some(capped) = backend.cap_effort(effort_str, &original_model) {
                 ctx.debug_logger.log_auxiliary(
                     "effort_cap",
                     None,

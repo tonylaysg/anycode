@@ -293,18 +293,21 @@ pub struct Backend {
     /// Model name to use for opus-family requests on this backend.
     #[serde(default)]
     pub model_opus: Option<String>,
+    /// Max effort cap for opus-family requests (low/medium/high/xhigh).
+    #[serde(default)]
+    pub model_opus_max_effort: Option<String>,
     /// Model name to use for sonnet-family requests on this backend.
     #[serde(default)]
     pub model_sonnet: Option<String>,
+    /// Max effort cap for sonnet-family requests.
+    #[serde(default)]
+    pub model_sonnet_max_effort: Option<String>,
     /// Model name to use for haiku-family requests on this backend.
     #[serde(default)]
     pub model_haiku: Option<String>,
-    /// Maximum allowed value for `output_config.effort`.
-    /// When set, any effort value higher than this will be capped.
-    /// Valid values: "low", "medium", "high", "xhigh".
-    /// Example: `max_effort = "medium"` prevents "high"/"xhigh" from being forwarded.
+    /// Max effort cap for haiku-family requests.
     #[serde(default)]
-    pub max_effort: Option<String>,
+    pub model_haiku_max_effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,9 +340,11 @@ impl Default for Backend {
             thinking_compat: None,
             thinking_budget_tokens: None,
             model_opus: None,
+            model_opus_max_effort: None,
             model_sonnet: None,
+            model_sonnet_max_effort: None,
             model_haiku: None,
-            max_effort: None,
+            model_haiku_max_effort: None,
         }
     }
 }

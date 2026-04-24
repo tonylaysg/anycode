@@ -38,11 +38,15 @@ pub struct BackendDto {
     #[serde(default)]
     pub model_opus: Option<String>,
     #[serde(default)]
+    pub model_opus_max_effort: Option<String>,
+    #[serde(default)]
     pub model_sonnet: Option<String>,
+    #[serde(default)]
+    pub model_sonnet_max_effort: Option<String>,
     #[serde(default)]
     pub model_haiku: Option<String>,
     #[serde(default)]
-    pub max_effort: Option<String>,
+    pub model_haiku_max_effort: Option<String>,
     #[serde(default)]
     pub pricing: Option<BackendPricing>,
 }
@@ -72,9 +76,11 @@ fn config_to_dto(config: &Config) -> ConfigDto {
             thinking_compat: b.thinking_compat,
             thinking_budget_tokens: b.thinking_budget_tokens,
             model_opus: b.model_opus.clone(),
+            model_opus_max_effort: b.model_opus_max_effort.clone(),
             model_sonnet: b.model_sonnet.clone(),
+            model_sonnet_max_effort: b.model_sonnet_max_effort.clone(),
             model_haiku: b.model_haiku.clone(),
-            max_effort: b.max_effort.clone(),
+            model_haiku_max_effort: b.model_haiku_max_effort.clone(),
             pricing: b.pricing.clone(),
         }).collect(),
         agents: config.claude.agents.clone(),
@@ -104,9 +110,11 @@ fn dto_to_backend(
         thinking_compat: dto.thinking_compat,
         thinking_budget_tokens: dto.thinking_budget_tokens,
         model_opus: dto.model_opus.clone(),
+        model_opus_max_effort: dto.model_opus_max_effort.clone(),
         model_sonnet: dto.model_sonnet.clone(),
+        model_sonnet_max_effort: dto.model_sonnet_max_effort.clone(),
         model_haiku: dto.model_haiku.clone(),
-        max_effort: dto.max_effort.clone(),
+        model_haiku_max_effort: dto.model_haiku_max_effort.clone(),
         pricing: dto.pricing.clone(),
     }
 }
@@ -196,9 +204,11 @@ pub async fn get_backend(
                 thinking_compat: b.thinking_compat,
                 thinking_budget_tokens: b.thinking_budget_tokens,
                 model_opus: b.model_opus.clone(),
+                model_opus_max_effort: b.model_opus_max_effort.clone(),
                 model_sonnet: b.model_sonnet.clone(),
+                model_sonnet_max_effort: b.model_sonnet_max_effort.clone(),
                 model_haiku: b.model_haiku.clone(),
-                max_effort: b.max_effort.clone(),
+                model_haiku_max_effort: b.model_haiku_max_effort.clone(),
                 pricing: b.pricing.clone(),
             };
             Json(dto).into_response()
