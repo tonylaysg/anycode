@@ -50,20 +50,34 @@ cargo install --path .
 2. Configure backends via WebUI at `http://127.0.0.1:47191`
 3. Press `Ctrl+B` to switch backends at any time
 
+To wrap **GitHub Copilot CLI** instead of Claude Code, launch via the
+`anycopilot` symlink (created automatically by `install.sh`):
+
+```bash
+anycopilot           # starts TUI with `copilot` embedded
+```
+
+`anycode` and `anycopilot` are the **same binary** — mode is selected by the
+invoked name (`argv[0]`). They read separate `[claude]` / `[copilot]` profiles
+from `~/.config/anycode/config.toml`.
+
 ### Commands
 
 ```
-anycode                          Start TUI (default backend)
-anycode --backend <name>        Start with specific backend
-anycode status                  Show running instance status
-anycode logs [-n 50] [-f]      View or follow debug logs
-anycode stop                    Stop running instance
-anycode webui                   Start WebUI configuration server
-anycode webui --daemon          Start WebUI in background
-anycode bind [local|lan|public] Change WebUI access mode
-anycode passwd                  Set WebUI login credentials
-anycode uninstall               Uninstall (keeps config)
-anycode uninstall --purge       Uninstall and remove all config
+anycode                          Start TUI (Claude Code mode)
+anycopilot                       Start TUI (Copilot CLI mode, via symlink)
+anycode --backend <name>         Start with specific backend
+anycode status                   Show running instance status
+anycode logs [-n 50] [-f]        View or follow debug logs
+anycode stop                     Stop running instance
+anycode reset                    Reset cached Claude Code auth state
+anycode webui                    Start WebUI configuration server (foreground)
+anycode webui --daemon           Start WebUI in background
+anycode webui --stop             Stop the WebUI daemon
+anycode bind [local|lan|public]  Change WebUI access mode
+anycode passwd                   Set WebUI login credentials
+anycode uninstall                Uninstall (keeps config, removes anycopilot symlink)
+anycode uninstall --purge        Uninstall and remove all config
 ```
 
 ### Hotkeys
@@ -252,20 +266,33 @@ cargo install --path .
 2. 访问 `http://127.0.0.1:47191` 通过 WebUI 配置后端
 3. 随时按 `Ctrl+B` 切换后端
 
+若想让 anycode 包装 **GitHub Copilot CLI** 而非 Claude Code，请通过
+`install.sh` 自动创建的 `anycopilot` 符号链接启动：
+
+```bash
+anycopilot           # 启动 TUI，内嵌 `copilot`
+```
+
+`anycode` 和 `anycopilot` 是**同一个二进制**，根据调用名（`argv[0]`）选择模式，
+分别读取 `~/.config/anycode/config.toml` 中的 `[claude]` / `[copilot]` 两个独立配置段。
+
 ### 命令
 
 ```
-anycode                          启动 TUI（使用默认后端）
-anycode --backend <名称>        指定初始后端启动
-anycode status                  查看运行状态
-anycode logs [-n 50] [-f]      查看 / 实时追踪日志
-anycode stop                    停止运行中的实例
-anycode webui                   启动 WebUI 配置服务
-anycode webui --daemon          后台模式启动 WebUI
-anycode bind [local|lan|public] 更改 WebUI 访问模式
-anycode passwd                  设置 WebUI 登录密码
-anycode uninstall               卸载（保留配置文件）
-anycode uninstall --purge       完全卸载（含配置文件）
+anycode                          启动 TUI（Claude Code 模式）
+anycopilot                       启动 TUI（Copilot CLI 模式，符号链接）
+anycode --backend <名称>         指定初始后端启动
+anycode status                   查看运行状态
+anycode logs [-n 50] [-f]        查看 / 实时追踪日志
+anycode stop                     停止运行中的实例
+anycode reset                    重置 Claude Code 认证缓存
+anycode webui                    启动 WebUI 配置服务（前台）
+anycode webui --daemon           后台模式启动 WebUI
+anycode webui --stop             停止后台 WebUI 守护进程
+anycode bind [local|lan|public]  更改 WebUI 访问模式
+anycode passwd                   设置 WebUI 登录密码
+anycode uninstall                卸载（保留配置文件，同时移除 anycopilot 符号链接）
+anycode uninstall --purge        完全卸载（含配置文件）
 ```
 
 ### 快捷键
