@@ -85,6 +85,7 @@ pub fn build_spawn_params(
 
     // Stage 4: Assemble arguments
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)
+        .copilot_mode(is_copilot)
         .with_session(&session, session_mode)
         .with_settings(settings)
         .with_teammate_mode(shim);
@@ -156,6 +157,7 @@ pub fn build_restart_params(
 
     // Stage 4: Assemble arguments (with extra)
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)
+        .copilot_mode(is_copilot)
         .with_session(&session, session_mode)
         .with_settings(settings)
         .with_teammate_mode(shim);

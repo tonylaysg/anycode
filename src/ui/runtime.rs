@@ -178,7 +178,8 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
 
     // Inject subagent hooks into spawn args now that we know the proxy port.
     // (build_spawn_params was called with proxy_port=None because port was unknown.)
-    {
+    // Skipped entirely in Copilot mode — Copilot CLI has no --settings flag.
+    if !cli_mode.is_copilot() {
         let assembler = crate::args::ArgAssembler::new()
             .with_subagent_hooks(actual_addr.port());
         spawn.args.extend(assembler.build());
@@ -592,6 +593,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                         .build()
                 };
                 let args = crate::args::ArgAssembler::from_passthrough(&classified.args)
+                    .copilot_mode(cli_mode.is_copilot())
                     .with_session_resume(&current_session_id)
                     .with_settings(app.settings_manager())
                     .with_teammate_mode(_teammate_shim.as_ref())

@@ -50,4 +50,9 @@ impl CliMode {
     pub fn is_claude(self) -> bool {
         matches!(self, CliMode::Claude)
     }
+
+    /// Whether this instance wraps GitHub Copilot CLI.
+    pub fn is_copilot(self) -> bool {
+        matches!(self, CliMode::Copilot)
+    }
 }

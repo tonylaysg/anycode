@@ -2,6 +2,18 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.5.5] - 2026-04-24
+
+### Bug Fixes
+
+- **copilot**: `anycopilot` failed at startup with `error: unknown option '--session-id'` from the GitHub Copilot CLI. anycode was unconditionally injecting Claude-Code-specific flags (`--session-id <id>`, `--teammate-mode tmux`, `--settings <hooks-json>`) regardless of `CliMode`. Copilot CLI rejects unknown flags and exits immediately. Added a `copilot_mode` flag on `ArgAssembler` that:
+    - skips `--session-id` injection on initial spawn (Copilot auto-assigns its own session ID);
+    - emits `--resume=<id>` (the `=` form Copilot requires) for resume/restart;
+    - no-ops `with_teammate_mode` and `with_subagent_hooks` (both are Claude-only);
+    - strips any stray `--session-id <id>` that leaks through user passthrough.
+
+  Wired through `build_spawn_params`, `build_restart_params`, and both `runtime.rs` assembler call sites. Added `CliMode::is_copilot()` helper. Regression tests in `tests/copilot_mode_args.rs` pin the contract (5 cases) and verify the Claude codepath is unchanged.
+
 ## [0.5.4] - 2026-04-24
 
 ### Bug Fixes
