@@ -166,6 +166,25 @@ fn profile_key(mode: CliMode) -> &'static str {
     mode.profile_key()
 }
 
+/// If a profile's `defaults.active` doesn't point at a real backend but the
+/// profile has at least one backend, adopt the first backend as active.
+///
+/// This happens in two scenarios:
+/// 1. User edits the copilot profile (which inherits `active = "claude"` from
+///    `Defaults::default()`) and adds a backend with a different name.
+/// 2. User copies a backend into an empty profile whose stale default active
+///    still points at "claude".
+///
+/// Without this self-heal, `validate_for` returns an error and the save/copy
+/// operation fails with 400, losing the user's edits.
+fn self_heal_active(profile: &mut crate::config::CliProfile) {
+    if !profile.backends.is_empty()
+        && !profile.backends.iter().any(|b| b.name == profile.defaults.active)
+    {
+        profile.defaults.active = profile.backends[0].name.clone();
+    }
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 /// GET /api/profiles — return available profiles and the running instance's mode.
@@ -222,20 +241,7 @@ pub async fn put_config(
         new_profile.backends = backends;
         new_profile.agents = dto.agents;
         // claude_settings is preserved (not editable via this endpoint).
-
-        // Self-heal: if the submitted `active` backend doesn't exist (e.g. the
-        // copilot profile inherits the default active="claude" from Defaults,
-        // but the user adds a backend named "openrouter" via the UI), adopt
-        // the first backend as active so the config validates and saves.
-        // Without this, the PUT returns 400 and the user's edits are lost.
-        if !new_profile.backends.is_empty()
-            && !new_profile
-                .backends
-                .iter()
-                .any(|b| b.name == new_profile.defaults.active)
-        {
-            new_profile.defaults.active = new_profile.backends[0].name.clone();
-        }
+        self_heal_active(new_profile);
     }
 
     if let Err(e) = new_config.validate_for(target) {
@@ -452,7 +458,11 @@ pub async fn post_copy_backend(
 
     // Insert into the target profile and persist.
     let mut new_config = existing.clone();
-    new_config.profile_mut(target_mode).backends.push(copied);
+    {
+        let target_profile = new_config.profile_mut(target_mode);
+        target_profile.backends.push(copied);
+        self_heal_active(target_profile);
+    }
 
     if let Err(e) = new_config.validate_for(target_mode) {
         return (StatusCode::BAD_REQUEST, e.to_string()).into_response();

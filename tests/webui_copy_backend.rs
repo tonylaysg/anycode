@@ -129,6 +129,40 @@ async fn copy_to_other_profile_creates_in_target_only() {
     assert_eq!(new.display_name, "From Claude");
 }
 
+/// Regression: copying the *first* backend into an empty copilot profile used to
+/// fail `validate_for` because `defaults.active` still held the stale "claude"
+/// default. post_copy_backend must self-heal by adopting the new backend.
+#[tokio::test]
+async fn copy_to_empty_profile_self_heals_active() {
+    let src = make_backend("src", Some("sek"));
+    let (base, _tmp, store) = spawn_webui(
+        vec![src],
+        vec![], // copilot profile starts empty; active defaults to "claude"
+        CliMode::Claude,
+    )
+    .await;
+
+    let resp = reqwest::Client::new()
+        .post(format!("{base}/api/config/backends/src/copy?profile=claude"))
+        .json(&serde_json::json!({
+            "target_profile": "copilot",
+            "new_name": "moved",
+        }))
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status();
+    let body = resp.text().await.unwrap();
+    assert_eq!(status, 200, "copy failed: {body}");
+
+    let cfg = store.get();
+    let cp = cfg.profile(CliMode::Copilot);
+    assert_eq!(cp.backends.len(), 1);
+    assert_eq!(cp.backends[0].name, "moved");
+    // Self-healed: active now points at the only backend.
+    assert_eq!(cp.defaults.active, "moved");
+}
+
 #[tokio::test]
 async fn copy_rejects_duplicate_name_in_target() {
     let src = make_backend("src", None);

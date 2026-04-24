@@ -2,7 +2,7 @@
 
 All notable changes to anycode are documented in this file.
 
-## [Unreleased]
+## [0.5.3] - 2026-04-24
 
 ### Features
 
@@ -10,7 +10,8 @@ All notable changes to anycode are documented in this file.
 
 ### Bug Fixes
 
-- **webui**: saving the copilot profile failed with `PUT /api/config?profile=copilot 400` because `Defaults::default()` sets `active = "claude"` while user-added copilot backends have different names. `put_config` now self-heals by adopting the first backend as active when the submitted `active` doesn't exist
+- **webui**: saving the copilot profile failed with `PUT /api/config?profile=copilot 400 Bad Request` because `Defaults::default()` sets `active = "claude"` while user-added copilot backends have different names. `put_config` now self-heals by adopting the first backend as active when the submitted `active` doesn't exist
+- **webui**: same self-heal applied to `post_copy_backend` — copying the first backend into an empty copilot profile would previously fail validation for the same reason
 
 ## [0.5.2] - 2026-04-24
 
