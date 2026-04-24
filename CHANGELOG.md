@@ -2,6 +2,17 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.1] - 2026-04-26
+
+### Bug Fixes
+
+- **copilot**: fix `anycopilot` regression where the Copilot CLI child received `COPILOT_PROVIDER_API_KEY=` (empty) and refused to start, complaining that a Copilot token was required. `src/ui/runtime.rs` had a stale pre-BYOK branch that zeroed the session token for Copilot mode; under BYOK that token is consumed as both the proxy auth and the CLI's provider key, so an empty value fails authentication at launch. The token is now an unconditional per-session UUID.
+- **proxy**: smarter upstream URL construction. Copilot CLI always emits paths prefixed with `/v1` (e.g. `/v1/messages`, `/v1/chat/completions`, `/v1/responses`), but many backends already embed `/v1` in their base URL (OpenAI, DeepSeek, `https://api.openai.com/v1`). Naïve concatenation produced `/v1/v1/...` and returned 404. The new `build_upstream_url` helper dedupes identical trailing/leading `/vN` segments while leaving non-matching versions (`/v2` vs `/v1`) and lookalikes (`/v1beta`, `/v10`) alone. No configuration required — works with existing backend entries.
+
+### Features
+
+- **copilot**: expanded `wire_api` to cover the three wire formats Copilot CLI speaks natively. New values: `anthropic` (default), `openai` (OpenAI Chat Completions), `openai-responses` (OpenAI `/v1/responses`, needed for GPT-5-class models), `azure`, `azure-responses`. Anycode now omits `COPILOT_PROVIDER_WIRE_API` entirely when `wire_api = anthropic`, silencing the Copilot CLI warning `Provider 'wireApi' option is ignored for Anthropic provider`. Exposed in the webui as a 5-option dropdown with inline help text.
+
 ## [0.6.0] - 2026-04-25
 
 ### Features
