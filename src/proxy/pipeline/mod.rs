@@ -196,11 +196,11 @@ async fn execute_pipeline_inner(
         ctx,
     ).await?;
 
-    // Stage 6.5: Auto-retry on invalid_reasoning_effort (non-streaming only).
-    // When the backend rejects the effort level, parse its supported values,
-    // cap the effort to the highest supported one, and retry once.
+    // Stage 6.5: Auto-retry on 400 errors (non-streaming only).
+    // Handles: invalid_reasoning_effort → cap to max supported effort
+    //          thinking.type "enabled" not supported → convert to "adaptive"
     let upstream_resp = if !is_streaming && upstream_resp.status().as_u16() == 400 {
-        effort_auto_retry(
+        backend_400_auto_retry(
             upstream_resp,
             &config.http_client,
             extracted.method,
@@ -228,15 +228,12 @@ async fn execute_pipeline_inner(
     Ok(response)
 }
 
-/// Check a 400 response for `invalid_reasoning_effort` and retry with the
-/// highest effort value the backend actually supports.
+/// Handle 400 responses that can be fixed by rewriting the request body:
+/// - `invalid_reasoning_effort`: retry with highest supported effort level
+/// - `thinking.type "enabled" not supported`: retry with `thinking.type: "adaptive"`
 ///
-/// Returns `Some(response)` with the retried response (or the original 400 if
-/// the error is unrelated), `None` if parsing or retry fails.
-/// When a 400 response contains `invalid_reasoning_effort`, parse the backend's
-/// supported effort values, cap to the highest one, and retry the request.
-/// For any other 400, return the original response unchanged (reconstructed from body).
-async fn effort_auto_retry(
+/// Any other 400 is returned unchanged (reconstructed from body).
+async fn backend_400_auto_retry(
     resp: reqwest::Response,
     client: &reqwest::Client,
     method: axum::http::Method,
@@ -247,7 +244,6 @@ async fn effort_auto_retry(
     config: &PipelineConfig,
     _ctx: &mut PipelineContext,
 ) -> reqwest::Response {
-    // Read the 400 body — we consume the response here
     let status = resp.status();
     let resp_headers = resp.headers().clone();
     let body_text = match resp.text().await {
@@ -255,36 +251,75 @@ async fn effort_auto_retry(
         Err(_) => return rebuild_response(status, resp_headers, String::new()),
     };
 
-    // Only handle invalid_reasoning_effort
-    if !body_text.contains("invalid_reasoning_effort") {
-        return rebuild_response(status, resp_headers, body_text);
+    // --- Case 1: invalid_reasoning_effort ---
+    if body_text.contains("invalid_reasoning_effort") {
+        let max_supported = match parse_max_supported_effort(&body_text) {
+            Some(m) => m,
+            None => return rebuild_response(status, resp_headers, body_text),
+        };
+
+        crate::metrics::app_log(
+            "effort_cap",
+            &format!("Auto-capped effort '{}' -> '{}' for backend '{}'",
+                extract_requested_effort(&body_text).unwrap_or("?"), max_supported, backend.name),
+        );
+
+        let new_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            Ok(mut json) => {
+                json["output_config"]["effort"] = serde_json::json!(max_supported);
+                match serde_json::to_vec(&json) {
+                    Ok(b) => b,
+                    Err(_) => return rebuild_response(status, resp_headers, body_text),
+                }
+            }
+            Err(_) => return rebuild_response(status, resp_headers, body_text),
+        };
+
+        return retry_with_body(client, method, uri, headers, new_body, backend, config, status, resp_headers, body_text).await;
     }
 
-    // Parse highest supported effort from error message
-    let max_supported = match parse_max_supported_effort(&body_text) {
-        Some(m) => m,
-        None => return rebuild_response(status, resp_headers, body_text),
-    };
+    // --- Case 2: thinking.type "enabled" not supported, backend wants "adaptive" ---
+    if body_text.contains("thinking.type") && body_text.contains("enabled") && body_text.contains("adaptive") {
+        crate::metrics::app_log(
+            "thinking_compat",
+            &format!("Backend '{}' does not support thinking.type=enabled; retrying with adaptive", backend.name),
+        );
 
-    crate::metrics::app_log(
-        "effort_cap",
-        &format!("Auto-capped effort '{}' -> '{}' for backend '{}'",
-            extract_requested_effort(&body_text).unwrap_or("?"), max_supported, backend.name),
-    );
-
-    // Rewrite body: set output_config.effort to max_supported
-    let new_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-        Ok(mut json) => {
-            json["output_config"]["effort"] = serde_json::json!(max_supported);
-            match serde_json::to_vec(&json) {
-                Ok(b) => b,
-                Err(_) => return rebuild_response(status, resp_headers, body_text),
+        let new_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            Ok(mut json) => {
+                if let Some(thinking) = json.get("thinking").and_then(|t| t.get("type")).and_then(|t| t.as_str()) {
+                    if thinking == "enabled" {
+                        json["thinking"] = serde_json::json!({"type": "adaptive"});
+                    }
+                }
+                match serde_json::to_vec(&json) {
+                    Ok(b) => b,
+                    Err(_) => return rebuild_response(status, resp_headers, body_text),
+                }
             }
-        }
-        Err(_) => return rebuild_response(status, resp_headers, body_text),
-    };
+            Err(_) => return rebuild_response(status, resp_headers, body_text),
+        };
 
-    // Retry with corrected body
+        return retry_with_body(client, method, uri, headers, new_body, backend, config, status, resp_headers, body_text).await;
+    }
+
+    // Unrecognized 400 — pass through
+    rebuild_response(status, resp_headers, body_text)
+}
+
+/// Send a retry request with a rewritten body. On failure, returns the original 400.
+async fn retry_with_body(
+    client: &reqwest::Client,
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: Vec<(String, String)>,
+    new_body: Vec<u8>,
+    backend: &crate::config::Backend,
+    config: &PipelineConfig,
+    orig_status: reqwest::StatusCode,
+    orig_headers: reqwest::header::HeaderMap,
+    orig_body: String,
+) -> reqwest::Response {
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
     let upstream_uri = format!("{}{}", backend.base_url, path_and_query);
     let mut builder = client.request(method, &upstream_uri);
@@ -292,10 +327,9 @@ async fn effort_auto_retry(
         builder = builder.header(name, value);
     }
     builder = builder.timeout(config.timeout_config.request);
-
     match builder.body(new_body).send().await {
         Ok(r) => r,
-        Err(_) => rebuild_response(status, resp_headers, body_text),
+        Err(_) => rebuild_response(orig_status, orig_headers, orig_body),
     }
 }
 
