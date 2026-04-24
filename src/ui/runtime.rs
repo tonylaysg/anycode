@@ -29,9 +29,10 @@ use uuid::Uuid;
 const UI_COMMAND_BUFFER: usize = 32;
 const STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Resolve the Copilot BYOK wire type for the active backend in the given
-/// profile. Returns `"anthropic"` or `"openai"`; defaults to `"anthropic"`
-/// when unset or unrecognized.
+/// Resolve the Copilot BYOK provider selector for the active backend in the
+/// given profile. Returns one of:
+///   `"anthropic"` | `"openai"` | `"openai-responses"` | `"azure"` | `"azure-responses"`.
+/// Defaults to `"anthropic"` when unset or unrecognized.
 fn active_wire_api(config_store: &ConfigStore, cli_mode: CliMode) -> &'static str {
     let cfg = config_store.get();
     let profile = cfg.profile(cli_mode);
@@ -40,7 +41,10 @@ fn active_wire_api(config_store: &ConfigStore, cli_mode: CliMode) -> &'static st
         .iter()
         .find(|b| b.name == profile.defaults.active);
     match active.and_then(|b| b.wire_api.as_deref()) {
-        Some("openai") => "openai",
+        Some("openai") | Some("openai-completions") => "openai",
+        Some("openai-responses") => "openai-responses",
+        Some("azure") | Some("azure-completions") => "azure",
+        Some("azure-responses") => "azure-responses",
         _ => "anthropic",
     }
 }
@@ -77,16 +81,21 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
     let base_raw_args = cli_args.clone();
     let base_proxy_url = config_store.get().proxy.base_url.clone();
 
-    // Generate session token for proxy authentication.
-    // Claude Code honors ANTHROPIC_CUSTOM_HEADERS to inject x-session-token on every
-    // request, so the proxy can validate requests come from its own spawned child.
-    // Copilot CLI does NOT read ANTHROPIC_CUSTOM_HEADERS, so we skip session token
-    // auth for Copilot mode (proxy is bound to 127.0.0.1 which is sufficient isolation).
-    let session_token = if cli_mode.is_claude() {
-        Uuid::new_v4().to_string()
-    } else {
-        String::new() // empty → ProxyServer treats as no auth required
-    };
+    // Session token: a random per-process bearer that the proxy uses to
+    // authenticate requests coming from its own spawned CLI child.
+    //
+    // * Claude Code reads it via `ANTHROPIC_CUSTOM_HEADERS` → sends it back
+    //   as `x-session-token`.
+    // * Copilot CLI under BYOK mode reads it via `COPILOT_PROVIDER_API_KEY`
+    //   → sends it back as `Authorization: Bearer …`. The proxy middleware
+    //   accepts either header shape.
+    //
+    // Both modes therefore need a real token; handing Copilot an empty string
+    // (as an earlier pre-BYOK build did) strips auth entirely and the CLI
+    // starts up with `COPILOT_PROVIDER_API_KEY=`, which the Copilot runtime
+    // rejects with "Copilot token is required" / "Logged out".
+    let _ = cli_mode; // mode is handled below; both modes now need a token
+    let session_token = Uuid::new_v4().to_string();
 
     // Build spawn parameters FIRST to get session_id before creating logger.
     // This prevents a race condition where logs are written to the wrong file.
