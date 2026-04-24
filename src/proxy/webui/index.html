@@ -192,11 +192,14 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
         <input id="f-models-path" placeholder="如: /v1/models 或 /models">
       </div>
       <div class="field" style="grid-column:1 / -1">
-        <label>Copilot 线路协议 (Wire API) <span style="color:#888;font-size:.8rem">仅 anycopilot 生效；决定 Copilot CLI 与 anycode 通信的格式</span></label>
+        <label>Copilot 启动协议 (Wire API) <span style="color:#888;font-size:.8rem">仅 anycopilot 生效；在启动时一次性选定，必须与后端原生 API 一致</span></label>
         <select id="f-wire-api">
-          <option value="">默认 (Anthropic)</option>
-          <option value="anthropic">Anthropic (/v1/messages)</option>
-          <option value="openai">OpenAI (/v1/chat/completions)</option>
+          <option value="">默认 (Anthropic, /v1/messages)</option>
+          <option value="anthropic">Anthropic (/v1/messages) — Claude 系列后端</option>
+          <option value="openai">OpenAI completions (/chat/completions) — GPT-4o、DeepSeek、OpenRouter、vLLM、Ollama</option>
+          <option value="openai-responses">OpenAI responses (/v1/responses) — GPT-5 系列</option>
+          <option value="azure">Azure completions (/chat/completions)</option>
+          <option value="azure-responses">Azure responses (/v1/responses) — Azure GPT-5</option>
         </select>
       </div>
     </div>

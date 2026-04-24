@@ -103,30 +103,50 @@ impl EnvSet {
     /// Variables injected:
     /// * `COPILOT_OFFLINE=true` — disables GitHub auth/telemetry.
     /// * `COPILOT_PROVIDER_BASE_URL=<proxy>` — the anycode proxy's address.
-    /// * `COPILOT_PROVIDER_TYPE=<type>` — wire format ("anthropic" | "openai").
+    /// * `COPILOT_PROVIDER_TYPE=<type>` — provider family ("anthropic" |
+    ///   "openai" | "azure"). Drives which endpoint the CLI posts to.
     /// * `COPILOT_PROVIDER_API_KEY=<session_token>` — proxy authenticates the
     ///   incoming request against this (also accepted as `Authorization: Bearer`
     ///   by the proxy's auth middleware).
-    /// * `COPILOT_PROVIDER_WIRE_API=<wire>` — "completions" (default) or
-    ///   "responses". anycode always ships "completions".
+    /// * `COPILOT_PROVIDER_WIRE_API=<wire>` — "completions" (`/chat/completions`,
+    ///   default) or "responses" (`/v1/responses`, required for GPT-5 series).
+    ///   Only emitted for openai/azure; Copilot CLI logs a warning and ignores
+    ///   the value for `type=anthropic`.
     /// * `COPILOT_HOME=<isolated dir>` — keeps Copilot CLI data out of the
     ///   system-wide `~/.copilot` directory so BYOK sessions don't collide with
     ///   an OAuth-authenticated installation.
     ///
-    /// `provider_type` controls which wire format the CLI emits and thus which
-    /// proxy inbound endpoint it hits (`/v1/messages` for anthropic,
-    /// `/v1/chat/completions` for openai).
+    /// `provider_type` is parsed as one of:
+    /// * `"anthropic"`                → TYPE=anthropic (CLI posts /v1/messages)
+    /// * `"openai"` / `"openai-completions"` → TYPE=openai, WIRE=completions
+    ///   (CLI posts /chat/completions)
+    /// * `"openai-responses"`         → TYPE=openai, WIRE=responses (CLI posts
+    ///   /v1/responses — GPT-5 series)
+    /// * `"azure"` / `"azure-completions"` / `"azure-responses"` — same shape
+    ///   as openai with provider type=azure.
+    ///
+    /// Any unrecognized value falls back to `anthropic`.
     pub fn with_copilot_env(
         mut self,
         proxy_url: &str,
         session_token: &str,
         provider_type: &str,
     ) -> Self {
+        let (ptype, wire) = match provider_type {
+            "anthropic" => ("anthropic", None),
+            "openai" | "openai-completions" => ("openai", Some("completions")),
+            "openai-responses" => ("openai", Some("responses")),
+            "azure" | "azure-completions" => ("azure", Some("completions")),
+            "azure-responses" => ("azure", Some("responses")),
+            _ => ("anthropic", None),
+        };
         self.vars.push(("COPILOT_OFFLINE".into(), "true".into()));
         self.vars.push(("COPILOT_PROVIDER_BASE_URL".into(), proxy_url.into()));
-        self.vars.push(("COPILOT_PROVIDER_TYPE".into(), provider_type.into()));
+        self.vars.push(("COPILOT_PROVIDER_TYPE".into(), ptype.into()));
         self.vars.push(("COPILOT_PROVIDER_API_KEY".into(), session_token.into()));
-        self.vars.push(("COPILOT_PROVIDER_WIRE_API".into(), "completions".into()));
+        if let Some(w) = wire {
+            self.vars.push(("COPILOT_PROVIDER_WIRE_API".into(), w.into()));
+        }
 
         // Isolate Copilot home directory so BYOK-driven sessions don't share
         // state (credentials, MCP config, session history) with an OAuth-logged-in

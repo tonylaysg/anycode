@@ -47,11 +47,52 @@ fn copilot_spawn_injects_byok_env_vars() {
         env_get(&p.env, "COPILOT_PROVIDER_API_KEY"),
         Some("session-tok-xyz")
     );
+    // Anthropic wire ignores WIRE_API and Copilot CLI logs a warning if it's
+    // set. anycode therefore omits it for this provider.
+    assert!(!env_has(&p.env, "COPILOT_PROVIDER_WIRE_API"));
+    assert!(env_has(&p.env, "COPILOT_HOME"));
+}
+
+#[test]
+fn copilot_openai_spawn_sets_wire_api_completions() {
+    let p = build_spawn_params(
+        &[],
+        "http://127.0.0.1:54321",
+        "COPILOT_API_URL",
+        "copilot",
+        "tok",
+        &settings(),
+        None,
+        Some(54321),
+        false,
+        "openai",
+    );
+    assert_eq!(env_get(&p.env, "COPILOT_PROVIDER_TYPE"), Some("openai"));
     assert_eq!(
         env_get(&p.env, "COPILOT_PROVIDER_WIRE_API"),
         Some("completions")
     );
-    assert!(env_has(&p.env, "COPILOT_HOME"));
+}
+
+#[test]
+fn copilot_openai_responses_spawn_sets_wire_api_responses() {
+    let p = build_spawn_params(
+        &[],
+        "http://127.0.0.1:54321",
+        "COPILOT_API_URL",
+        "copilot",
+        "tok",
+        &settings(),
+        None,
+        Some(54321),
+        false,
+        "openai-responses",
+    );
+    assert_eq!(env_get(&p.env, "COPILOT_PROVIDER_TYPE"), Some("openai"));
+    assert_eq!(
+        env_get(&p.env, "COPILOT_PROVIDER_WIRE_API"),
+        Some("responses")
+    );
 }
 
 #[test]
@@ -96,6 +137,11 @@ fn copilot_spawn_propagates_provider_type() {
         "openai",
     );
     assert_eq!(env_get(&p.env, "COPILOT_PROVIDER_TYPE"), Some("openai"));
+    // WIRE_API defaults to "completions" for the "openai" selector.
+    assert_eq!(
+        env_get(&p.env, "COPILOT_PROVIDER_WIRE_API"),
+        Some("completions")
+    );
 }
 
 #[test]
