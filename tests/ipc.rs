@@ -50,6 +50,7 @@ fn test_config() -> Config {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         },
             Backend {
                 name: "beta".to_string(),
@@ -68,6 +69,7 @@ fn test_config() -> Config {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         },
         ],
         agents: None,

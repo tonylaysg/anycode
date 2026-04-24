@@ -58,6 +58,7 @@ fn create_integration_config(mock_base_url: &str) -> Config {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         },
         ],
     ..Default::default()
@@ -307,6 +308,7 @@ async fn test_pipeline_with_backend_override() {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         });
 
     let backend_state = BackendState::from_config(config.claude.clone()).unwrap();

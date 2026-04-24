@@ -2,6 +2,17 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.2] - 2026-04-26
+
+### Features
+
+- **proxy**: new per-backend `strip_request_prefix` config field for backends that expose the API without the `/v1` segment entirely (e.g. `POST /chat/completions`, `GET /models`). Copilot CLI always emits `/v1/...` — setting `strip_request_prefix = "/v1"` removes the matching leading segment before concatenation. Combined with the smart `/vN` dedup from 0.6.1 this covers all four common URL shapes:
+  * `base=api.anthropic.com`              → `/v1/messages` kept
+  * `base=api.openai.com/v1`               → `/v1/messages` deduped to `/v1/messages`
+  * `base=api.foo.com`, strip=`/v1`        → `/v1/chat/completions` → `/chat/completions`
+  * `base=api.foo.com/openai`, strip=`/v1` → `/v1/messages` → `/openai/messages`
+- **webui**: expose `strip_request_prefix` as an inline input on the backend edit modal (label `请求路径前缀剥离`, placeholder `/v1`). Empty = automatic dedup only.
+
 ## [0.6.1] - 2026-04-26
 
 ### Bug Fixes

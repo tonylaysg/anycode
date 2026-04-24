@@ -41,7 +41,11 @@ pub async fn forward_with_retry(
         .path_and_query()
         .map(|pq| pq.as_str())
         .unwrap_or("/");
-    let upstream_uri = super::build_upstream_url(&backend.base_url, path_and_query);
+    let upstream_uri = super::build_upstream_url(
+        &backend.base_url,
+        backend.strip_request_prefix.as_deref(),
+        path_and_query,
+    );
 
     let mut attempt = 0u32;
 

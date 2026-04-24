@@ -393,7 +393,11 @@ async fn retry_with_body(
     orig_body: String,
 ) -> reqwest::Response {
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    let upstream_uri = build_upstream_url(&backend.base_url, path_and_query);
+    let upstream_uri = build_upstream_url(
+        &backend.base_url,
+        backend.strip_request_prefix.as_deref(),
+        path_and_query,
+    );
     let mut builder = client.request(method, &upstream_uri);
     for (name, value) in &headers {
         builder = builder.header(name, value);

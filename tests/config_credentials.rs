@@ -59,6 +59,7 @@ fn test_credential_resolution_passthrough() {
         model_haiku: None, model_haiku_max_effort: None,
         models_path: None,
         wire_api: None,
+            strip_request_prefix: None,
     };
 
     assert!(matches!(

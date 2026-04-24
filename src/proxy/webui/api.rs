@@ -82,6 +82,8 @@ pub struct BackendDto {
     pub models_path: Option<String>,
     #[serde(default)]
     pub wire_api: Option<String>,
+    #[serde(default)]
+    pub strip_request_prefix: Option<String>,
 }
 
 /// Full config DTO returned to the browser — api_keys are masked.
@@ -130,6 +132,7 @@ fn profile_to_dto(profile: &CliProfile, profile_key: &str) -> ConfigDto {
             pricing: b.pricing.clone(),
             models_path: b.models_path.clone(),
             wire_api: b.wire_api.clone(),
+            strip_request_prefix: b.strip_request_prefix.clone(),
         }).collect(),
         agents: profile.agents.clone(),
         profile: Some(profile_key.to_string()),
@@ -167,6 +170,7 @@ fn dto_to_backend(
         pricing: dto.pricing.clone(),
         models_path: dto.models_path.clone(),
         wire_api: dto.wire_api.clone(),
+        strip_request_prefix: dto.strip_request_prefix.clone(),
     }
 }
 
@@ -355,6 +359,7 @@ pub async fn get_backend(
                 pricing: b.pricing.clone(),
                 models_path: b.models_path.clone(),
                 wire_api: b.wire_api.clone(),
+                strip_request_prefix: b.strip_request_prefix.clone(),
             };
             Json(dto).into_response()
         }

@@ -17,6 +17,7 @@ fn make_backend(auth_type: &str, api_key: Option<&str>) -> Backend {
         model_haiku: None, model_haiku_max_effort: None,
         models_path: None,
         wire_api: None,
+            strip_request_prefix: None,
     }
 }
 

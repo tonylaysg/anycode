@@ -202,6 +202,10 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
           <option value="azure-responses">Azure responses (/v1/responses) — Azure GPT-5</option>
         </select>
       </div>
+      <div class="field" style="grid-column:1 / -1">
+        <label>请求路径前缀剥离 <span style="color:#888;font-size:.8rem">留空=智能 /vN 去重；设为 /v1 则强制剥离 Copilot CLI 的 /v1 前缀（适用于仅暴露 /chat/completions、/models 等无 /v1 的后端）</span></label>
+        <input id="f-strip-prefix" placeholder="如: /v1 或 /v1beta（留空=自动）">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
@@ -384,7 +388,7 @@ function openAddBackend() {
   editingBackend = null;
   document.getElementById('modal-title').textContent = '添加后端';
   document.getElementById('modal-alert').innerHTML = '';
-  ['name','display','url','key','opus','sonnet','haiku','models-path'].forEach(id => {
+  ['name','display','url','key','opus','sonnet','haiku','models-path','strip-prefix'].forEach(id => {
     document.getElementById('f-' + id).value = '';
   });
   document.getElementById('f-auth').value = 'passthrough';
@@ -417,6 +421,7 @@ function openEditBackend(name) {
   document.getElementById('f-haiku-effort').value = b.model_haiku_max_effort || '';
   document.getElementById('f-models-path').value = b.models_path || '';
   document.getElementById('f-wire-api').value = b.wire_api || '';
+  document.getElementById('f-strip-prefix').value = b.strip_request_prefix || '';
   document.getElementById('f-thinking').value = b.thinking_compat === true ? 'true' : b.thinking_compat === false ? 'false' : '';
   document.getElementById('backend-modal').classList.add('open');
 }
@@ -507,6 +512,7 @@ async function saveBackend() {
   const haikuEffort = document.getElementById('f-haiku-effort').value;
   const modelsPath = document.getElementById('f-models-path').value.trim();
   const wireApi = document.getElementById('f-wire-api').value;
+  const stripPrefix = document.getElementById('f-strip-prefix').value.trim();
   const thinkingVal = document.getElementById('f-thinking').value;
 
   if (!name || !display || !url) {
@@ -531,6 +537,7 @@ async function saveBackend() {
     model_haiku_max_effort: haikuEffort || null,
     models_path: modelsPath || null,
     wire_api: wireApi || null,
+    strip_request_prefix: stripPrefix || null,
     thinking_compat,
     thinking_budget_tokens: null,
     pricing: null,

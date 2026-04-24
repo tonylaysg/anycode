@@ -40,6 +40,7 @@ fn create_test_config() -> Config {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         },
             Backend {
                 name: "backend2".to_string(),
@@ -58,6 +59,7 @@ fn create_test_config() -> Config {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         },
         ],
         agents: None,
@@ -213,6 +215,7 @@ fn test_update_config() {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         });
 
     state.update_config(new_config.claude.clone()).unwrap();

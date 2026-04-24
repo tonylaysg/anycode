@@ -344,6 +344,25 @@ pub struct Backend {
     /// Ignored for Claude-Code (`anycode`) sessions.
     #[serde(default)]
     pub wire_api: Option<String>,
+    /// Request path prefix to strip before forwarding to the backend.
+    ///
+    /// Copilot CLI always emits paths prefixed with `/v1` (`/v1/messages`,
+    /// `/v1/chat/completions`, `/v1/responses`, `/v1/models`). Most backends
+    /// accept that shape directly or already carry `/v1` in their base URL
+    /// (which `build_upstream_url` dedupes automatically).
+    ///
+    /// Some backends, however, expose the API **without** the `/v1` segment
+    /// (e.g. `POST /chat/completions`, `GET /models`). Set this field to
+    /// `"/v1"` to have anycode strip the leading segment before
+    /// concatenation. Accepts any literal prefix — not limited to `/v1`.
+    ///
+    /// Examples:
+    /// * base_url = `https://api.foo.com`, strip_request_prefix = `/v1`
+    ///   → CLI `/v1/chat/completions` → upstream `/chat/completions`
+    /// * base_url = `https://api.foo.com/openai`, strip_request_prefix = `/v1`
+    ///   → CLI `/v1/messages` → upstream `/openai/messages`
+    #[serde(default)]
+    pub strip_request_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -383,6 +402,7 @@ impl Default for Backend {
             model_haiku_max_effort: None,
             models_path: None,
             wire_api: None,
+            strip_request_prefix: None,
         }
     }
 }

@@ -34,6 +34,7 @@ fn make_backend(name: &str, base_url: &str, models_path: Option<&str>) -> Backen
         model_haiku_max_effort: None,
         models_path: models_path.map(String::from),
         wire_api: None,
+            strip_request_prefix: None,
     }
 }
 
