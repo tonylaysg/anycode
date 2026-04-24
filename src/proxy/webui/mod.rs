@@ -222,6 +222,14 @@ async fn handler_get_backend(
 ) -> Response {
     api::get_backend(State(app.webui), q, path).await
 }
+async fn handler_post_copy_backend(
+    State(app): State<AppState>,
+    q: axum::extract::Query<api::ProfileQuery>,
+    path: axum::extract::Path<String>,
+    json: axum::Json<api::CopyBackendRequest>,
+) -> Response {
+    api::post_copy_backend(State(app.webui), q, path, json).await
+}
 async fn handler_get_profiles(State(app): State<AppState>) -> Response {
     api::get_profiles(State(app.webui)).await.into_response()
 }
@@ -243,6 +251,7 @@ fn build_router(app: AppState) -> Router {
         .route("/api/config",                   get(handler_get_config).put(handler_put_config))
         .route("/api/config/active",            post(handler_post_active))
         .route("/api/config/backends/{name}",   get(handler_get_backend))
+        .route("/api/config/backends/{name}/copy", post(handler_post_copy_backend))
         .route("/api/profiles",                 get(handler_get_profiles))
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth_mw))
         .with_state(app)

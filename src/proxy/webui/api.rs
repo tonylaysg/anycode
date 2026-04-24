@@ -222,6 +222,20 @@ pub async fn put_config(
         new_profile.backends = backends;
         new_profile.agents = dto.agents;
         // claude_settings is preserved (not editable via this endpoint).
+
+        // Self-heal: if the submitted `active` backend doesn't exist (e.g. the
+        // copilot profile inherits the default active="claude" from Defaults,
+        // but the user adds a backend named "openrouter" via the UI), adopt
+        // the first backend as active so the config validates and saves.
+        // Without this, the PUT returns 400 and the user's edits are lost.
+        if !new_profile.backends.is_empty()
+            && !new_profile
+                .backends
+                .iter()
+                .any(|b| b.name == new_profile.defaults.active)
+        {
+            new_profile.defaults.active = new_profile.backends[0].name.clone();
+        }
     }
 
     if let Err(e) = new_config.validate_for(target) {
@@ -332,3 +346,139 @@ pub async fn get_backend(
     }
 }
 
+// ── Copy / clone backend ──────────────────────────────────────────────────────
+
+/// Request body for `POST /api/config/backends/{name}/copy`.
+#[derive(Debug, Deserialize)]
+pub struct CopyBackendRequest {
+    /// Target profile: "claude" or "copilot".
+    /// May equal the source profile (in which case this is a same-profile clone).
+    pub target_profile: String,
+    /// New backend `name` (unique id) in the target profile.
+    pub new_name: String,
+    /// Optional new display name. If omitted, reuses the source display name.
+    #[serde(default)]
+    pub new_display_name: Option<String>,
+}
+
+/// POST /api/config/backends/{name}/copy?profile=src — copy a backend
+/// (including its api_key) into another profile or clone within the same profile.
+///
+/// Server-side copy is required because `api_key` is never exposed to the
+/// browser (it's masked in all GET responses), so a purely client-side
+/// duplicate would lose the credential.
+///
+/// Validates:
+/// - source backend exists in `?profile=`
+/// - `new_name` is non-empty and doesn't collide with an existing backend in
+///   the target profile
+/// - target profile is a known profile key
+///
+/// Persists the updated config and hot-updates `BackendState` when the
+/// target profile matches the running instance's cli_mode.
+pub async fn post_copy_backend(
+    State(state): State<WebuiState>,
+    Query(q): Query<ProfileQuery>,
+    Path(name): Path<String>,
+    Json(req): Json<CopyBackendRequest>,
+) -> Response {
+    let source_mode = match q.resolve(state.cli_mode) {
+        Ok(m) => m,
+        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+
+    let target_mode = match req.target_profile.as_str() {
+        "claude" => CliMode::Claude,
+        "copilot" => CliMode::Copilot,
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Invalid target_profile '{}'. Must be 'claude' or 'copilot'.", other),
+            )
+                .into_response();
+        }
+    };
+
+    let new_name = req.new_name.trim().to_string();
+    if new_name.is_empty() {
+        return (StatusCode::BAD_REQUEST, "new_name must not be empty".to_string()).into_response();
+    }
+
+    let existing = state.config_store.get();
+
+    // Look up the source backend and deep-clone it (preserves api_key).
+    let source_backend = {
+        let src = existing.profile(source_mode);
+        match src.backends.iter().find(|b| b.name == name) {
+            Some(b) => b.clone(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    format!(
+                        "Backend '{}' not found in {} profile",
+                        name,
+                        profile_key(source_mode)
+                    ),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    // Check name uniqueness in the target profile.
+    if existing
+        .profile(target_mode)
+        .backends
+        .iter()
+        .any(|b| b.name == new_name)
+    {
+        return (
+            StatusCode::CONFLICT,
+            format!(
+                "Backend '{}' already exists in {} profile",
+                new_name,
+                profile_key(target_mode)
+            ),
+        )
+            .into_response();
+    }
+
+    // Build the new backend from the cloned source.
+    let mut copied = source_backend;
+    copied.name = new_name.clone();
+    if let Some(dn) = req.new_display_name.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        copied.display_name = dn.to_string();
+    }
+
+    // Insert into the target profile and persist.
+    let mut new_config = existing.clone();
+    new_config.profile_mut(target_mode).backends.push(copied);
+
+    if let Err(e) = new_config.validate_for(target_mode) {
+        return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
+    }
+
+    let path = state.config_store.path().to_path_buf();
+    if let Err(e) = save_config(&path, &new_config) {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    }
+    let _ = state.config_store.reload();
+
+    // Hot-update BackendState when the target profile is the running instance's mode.
+    if target_mode == state.cli_mode {
+        let new_profile = new_config.profile(target_mode).clone();
+        if let Err(e) = state.backend_state.update_config(new_profile) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Config saved but runtime update failed: {e}"),
+            )
+                .into_response();
+        }
+    }
+
+    Json(profile_to_dto(
+        new_config.profile(target_mode),
+        profile_key(target_mode),
+    ))
+    .into_response()
+}

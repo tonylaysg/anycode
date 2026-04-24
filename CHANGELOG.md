@@ -2,6 +2,16 @@
 
 All notable changes to anycode are documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- **webui**: copy/clone backend across profiles — new `POST /api/config/backends/{name}/copy` endpoint preserves the full backend definition including `api_key` (which is never exposed to the browser). The UI adds a 复制 button per backend row with a modal for choosing target profile and new name; supports both same-profile cloning and cross-profile copy (claude ↔ copilot)
+
+### Bug Fixes
+
+- **webui**: saving the copilot profile failed with `PUT /api/config?profile=copilot 400` because `Defaults::default()` sets `active = "claude"` while user-added copilot backends have different names. `put_config` now self-heals by adopting the first backend as active when the submitted `active` doesn't exist
+
 ## [0.5.2] - 2026-04-24
 
 ### Bug Fixes

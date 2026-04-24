@@ -195,6 +195,43 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
   </div>
 </div>
 
+<!-- Backend Copy/Clone Modal -->
+<div class="modal-bg" id="copy-modal">
+  <div class="modal">
+    <div class="modal-title">复制 / 克隆后端</div>
+    <div id="copy-modal-alert"></div>
+    <div style="color:#aaa;font-size:.85rem;margin-bottom:.8rem">
+      来源：<span id="copy-source-label" style="color:#eee"></span>
+      <span style="color:#666;margin-left:.6rem">（api_key 会一并复制）</span>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label>目标 Profile</label>
+        <select id="copy-target-profile">
+          <option value="claude">Claude Code</option>
+          <option value="copilot">Copilot CLI</option>
+        </select>
+        <span class="hint">选择与来源相同则视为"克隆"</span>
+      </div>
+      <div class="field">
+        <label>新名称（唯一 ID）</label>
+        <input id="copy-new-name" placeholder="如: openrouter-copy">
+        <span class="hint">在目标 profile 内必须唯一</span>
+      </div>
+    </div>
+    <div class="form-grid single" style="margin-top:.8rem">
+      <div class="field">
+        <label>新显示名称（可选）</label>
+        <input id="copy-new-display" placeholder="留空则沿用原显示名">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCopyModal()">取消</button>
+      <button class="btn btn-success" onclick="submitCopyBackend()">复制</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let config = null;
 let editingBackend = null;
@@ -267,6 +304,7 @@ function renderBackends() {
       <div class="btn-group">
         ${!isActive ? `<button class="btn btn-success btn-sm" onclick="switchBackend('${escHtml(b.name)}')">切换</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="openEditBackend('${escHtml(b.name)}')">编辑</button>
+        <button class="btn btn-ghost btn-sm" onclick="openCopyBackend('${escHtml(b.name)}')">复制</button>
         <button class="btn btn-danger btn-sm" onclick="deleteBackend('${escHtml(b.name)}')" ${isActive ? 'disabled title="不能删除活跃后端"' : ''}>删除</button>
       </div>
     </div>`;
@@ -367,6 +405,74 @@ function openEditBackend(name) {
 
 function closeModal() {
   document.getElementById('backend-modal').classList.remove('open');
+}
+
+function openCopyBackend(name) {
+  const b = config.backends.find(x => x.name === name);
+  if (!b) return;
+  document.getElementById('copy-source-label').textContent =
+    b.display_name + ' (' + b.name + ')  — 来自 ' + currentProfile + ' profile';
+  document.getElementById('copy-modal-alert').innerHTML = '';
+  document.getElementById('copy-target-profile').value = currentProfile;
+  document.getElementById('copy-new-name').value = b.name + '-copy';
+  document.getElementById('copy-new-display').value = '';
+  // Remember the source name on the modal for the submit handler.
+  document.getElementById('copy-modal').dataset.sourceName = name;
+  document.getElementById('copy-modal').classList.add('open');
+}
+
+function closeCopyModal() {
+  document.getElementById('copy-modal').classList.remove('open');
+}
+
+async function submitCopyBackend() {
+  const modal = document.getElementById('copy-modal');
+  const alertBox = document.getElementById('copy-modal-alert');
+  const sourceName = modal.dataset.sourceName;
+  const targetProfile = document.getElementById('copy-target-profile').value;
+  const newName = document.getElementById('copy-new-name').value.trim();
+  const newDisplay = document.getElementById('copy-new-display').value.trim();
+
+  if (!newName) {
+    alertBox.innerHTML = '<div class="alert error">新名称不能为空</div>';
+    return;
+  }
+  if (targetProfile === currentProfile && newName === sourceName) {
+    alertBox.innerHTML = '<div class="alert error">克隆到同一 profile 时，新名称必须与来源不同</div>';
+    return;
+  }
+
+  try {
+    const r = await fetch(
+      '/api/config/backends/' + encodeURIComponent(sourceName) + '/copy' + profileQS(),
+      {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          target_profile: targetProfile,
+          new_name: newName,
+          new_display_name: newDisplay || null,
+        }),
+      }
+    );
+    if (!r.ok) {
+      const t = await r.text();
+      alertBox.innerHTML = '<div class="alert error">' + escHtml('复制失败: ' + t) + '</div>';
+      return;
+    }
+
+    closeCopyModal();
+    const inSameProfile = targetProfile === currentProfile;
+    if (inSameProfile) {
+      // Reload current profile config to show the cloned backend.
+      await loadConfig();
+      showAlert('已克隆为: ' + newName, 'success');
+    } else {
+      showAlert('已复制到 ' + targetProfile + ' profile: ' + newName, 'success');
+    }
+  } catch(e) {
+    alertBox.innerHTML = '<div class="alert error">' + escHtml('复制失败: ' + e.message) + '</div>';
+  }
 }
 
 async function saveBackend() {
