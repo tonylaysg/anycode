@@ -92,6 +92,7 @@ impl EventHandler {
             let mut reader = match TtyReader::open() {
                 Ok(r) => r,
                 Err(err) => {
+                    crate::ui::runtime_trace(&format!("events thread: TtyReader::open FAILED: {}", err));
                     crate::metrics::app_log_error(
                         "events",
                         "Failed to open /dev/tty",
@@ -100,6 +101,7 @@ impl EventHandler {
                     return;
                 }
             };
+            crate::ui::runtime_trace("events thread: TtyReader opened OK");
 
             // Register SIGWINCH handler to detect terminal resize
             let sigwinch_flag = Arc::new(AtomicBool::new(false));
@@ -135,8 +137,12 @@ impl EventHandler {
                     Ok(None) => {
                         // Timeout — no event
                     }
-                    Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                    Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => {
+                        crate::ui::runtime_trace("events thread: read UnexpectedEof -> thread exit");
+                        break;
+                    }
                     Err(err) => {
+                        crate::ui::runtime_trace(&format!("events thread: read err {} -> thread exit", err));
                         crate::metrics::app_log_error(
                             "events",
                             "TtyReader error",

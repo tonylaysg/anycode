@@ -18,6 +18,7 @@ pub fn classify_key(app: &mut App, key: &KeyInput) -> InputAction {
     // Global hotkeys (regardless of popup state)
     match &key.kind {
         KeyKind::Control('q') => {
+            crate::ui::runtime_trace("input: Ctrl+Q -> request_quit");
             app.request_quit();
             return InputAction::None;
         }

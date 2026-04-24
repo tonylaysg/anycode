@@ -29,6 +29,32 @@ use uuid::Uuid;
 const UI_COMMAND_BUFFER: usize = 32;
 const STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Unconditional, best-effort startup tracer. Writes every lifecycle
+/// transition to ~/.config/anycode/startup.log so we can diagnose
+/// "anycopilot 启动后立即退出" on users' shells where the normal debug
+/// logger isn't initialized yet (or where debug_logging is disabled).
+/// All errors are swallowed — tracing must never break startup.
+pub(crate) fn runtime_trace(msg: &str) {
+    use std::io::Write;
+    let path = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+        .join("anycode")
+        .join("startup.log");
+    let _ = std::fs::create_dir_all(path.parent().unwrap());
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let _ = writeln!(f, "[{}] pid={} {}", ts, std::process::id(), msg);
+    }
+}
+
+#[inline]
+fn startup_trace(msg: &str) {
+    runtime_trace(msg);
+}
+
 /// Resolve the Copilot BYOK provider selector for the active backend in the
 /// given profile. Returns one of:
 ///   `"anthropic"` | `"openai"` | `"openai-responses"` | `"azure"` | `"azure-responses"`.
@@ -50,7 +76,9 @@ fn active_wire_api(config_store: &ConfigStore, cli_mode: CliMode) -> &'static st
 }
 
 pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<String>) -> io::Result<()> {
+    startup_trace(&format!("ui::run ENTER mode={:?} backend_override={:?}", cli_mode, backend_override));
     let (mut terminal, guard) = setup_terminal()?;
+    startup_trace("setup_terminal OK (alt-screen entered, raw mode on)");
     let tick_rate = Duration::from_millis(250);
 
     // Load initial config and apply backend override
@@ -339,7 +367,11 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
         events.sender(),
         app.pty_generation(),
     )
-    .map_err(|err| io::Error::other(err.to_string()))?;
+    .map_err(|err| {
+        startup_trace(&format!("PtySession::spawn FAILED: {}", err));
+        io::Error::other(err.to_string())
+    })?;
+    startup_trace(&format!("PtySession::spawn OK command={}", spawn.command));
 
     app.attach_pty(pty_session.handle());
     if let Ok((cols, rows)) = crossterm::terminal::size() {
@@ -365,9 +397,11 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
     let mut last_click: Option<(Instant, GridPos)> = None;
     const DOUBLE_CLICK_MS: u128 = 400;
 
+    startup_trace("entering main event loop");
     loop {
         terminal.draw(|frame| draw(frame, &app))?;
         if app.should_quit() {
+            startup_trace("loop exit: app.should_quit() = true");
             break;
         }
 
@@ -547,6 +581,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 );
             }
             Ok(AppEvent::Shutdown) => {
+                startup_trace("AppEvent::Shutdown received -> request_quit");
                 app.request_quit();
             }
             Ok(AppEvent::ProcessExit { pty_generation }) => {
@@ -596,6 +631,12 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                         ErrorCategory::Process,
                         "Claude Code process exited",
                     );
+                    startup_trace(&format!(
+                        "AppEvent::ProcessExit pty_gen={} app_gen={} lifecycle_ready={} -> request_quit",
+                        pty_generation,
+                        app.pty_generation(),
+                        app.pty_store.state().is_ready(),
+                    ));
                     app.request_quit();
                 }
             }
@@ -689,9 +730,13 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 teammate_backend_state.set(backend_id);
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                startup_trace("loop exit: events channel Disconnected");
+                break;
+            }
         }
     }
+    startup_trace("loop exited, starting shutdown sequence");
 
     // Signal shutdown to all components
     shutdown_coordinator.signal();
@@ -713,6 +758,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
 
     shutdown_coordinator.advance(ShutdownPhase::Complete);
     crate::metrics::app_log("runtime", "Shutdown complete");
+    startup_trace("ui::run RETURN Ok(())");
     Ok(())
 }
 

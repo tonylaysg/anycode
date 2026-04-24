@@ -17,3 +17,4 @@ pub mod terminal_guard;
 pub mod theme;
 
 pub use runtime::run;
+pub(crate) use runtime::runtime_trace;
