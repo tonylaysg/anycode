@@ -53,6 +53,7 @@ fn create_test_config() -> Config {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         },
             Backend {
                 name: "anthropic".to_string(),
@@ -70,6 +71,7 @@ fn create_test_config() -> Config {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         },
             Backend {
                 name: "openrouter".to_string(),
@@ -87,6 +89,7 @@ fn create_test_config() -> Config {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         },
         ],
     ..Default::default()
@@ -613,6 +616,7 @@ fn test_transform_body_no_json() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, is_streaming, mapping, _) = pipeline::transform_body(
@@ -652,6 +656,7 @@ fn test_transform_body_model_rewrite() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, mapping, _) = pipeline::transform_body(
@@ -693,6 +698,7 @@ fn test_transform_body_thinking_compat_adaptive_to_enabled() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, _, _) = pipeline::transform_body(
@@ -733,6 +739,7 @@ fn test_transform_body_thinking_compat_no_adaptive() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, _, _) = pipeline::transform_body(
@@ -773,6 +780,7 @@ fn test_transform_body_no_thinking_compat() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, _, _) = pipeline::transform_body(
@@ -865,6 +873,7 @@ fn test_transform_body_budget_calculation_from_max_tokens() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, _, _) = pipeline::transform_body(
@@ -904,6 +913,7 @@ fn test_transform_body_budget_default_when_no_max_tokens() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, _, _) = pipeline::transform_body(
@@ -966,6 +976,7 @@ fn test_build_headers_strips_auth_for_own_credentials() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
@@ -1003,6 +1014,7 @@ fn test_build_headers_passthrough_keeps_auth() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
@@ -1036,6 +1048,7 @@ fn test_build_headers_patches_anthropic_beta() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
@@ -1077,6 +1090,7 @@ fn test_build_headers_no_anthropic_beta_patch_for_anthropic() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
@@ -1178,6 +1192,7 @@ fn test_corner_case_model_family_detection_case_sensitive() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     for (model, expected) in test_cases {
@@ -1222,6 +1237,7 @@ fn test_corner_case_budget_tokens_with_small_max_tokens() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
         let (result, _, _, _) = pipeline::transform_body(
@@ -1293,6 +1309,7 @@ fn test_corner_case_empty_model_string() {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         };
 
     let (result, _, mapping, _) = pipeline::transform_body(

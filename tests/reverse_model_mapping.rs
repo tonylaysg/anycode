@@ -360,6 +360,7 @@ fn create_backend_with_model_map(
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         }
 }
 
@@ -380,6 +381,7 @@ fn create_passthrough_backend(name: &str, base_url: &str) -> Backend {
             model_sonnet_max_effort: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         }
 }
 

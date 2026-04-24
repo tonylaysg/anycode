@@ -332,6 +332,18 @@ pub struct Backend {
     /// path (e.g. `/api/models`, `/openai/v1/models`). Must start with `/`.
     #[serde(default)]
     pub models_path: Option<String>,
+    /// Wire protocol Copilot CLI should speak to anycode when this backend is
+    /// active under BYOK mode (`anycopilot`).
+    ///
+    /// * `None` / `"anthropic"` (default) — CLI posts to `/v1/messages`.
+    ///   Suitable for genuine Anthropic endpoints and for any OpenAI-compatible
+    ///   gateway that anycode's thinking-compat layer can shim.
+    /// * `"openai"` — CLI posts to `/v1/chat/completions`. Use with native
+    ///   OpenAI-compatible backends (DeepSeek, OpenRouter, LiteLLM, vLLM).
+    ///
+    /// Ignored for Claude-Code (`anycode`) sessions.
+    #[serde(default)]
+    pub wire_api: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -370,6 +382,7 @@ impl Default for Backend {
             model_haiku: None,
             model_haiku_max_effort: None,
             models_path: None,
+            wire_api: None,
         }
     }
 }

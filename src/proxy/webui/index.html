@@ -191,6 +191,14 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
         <label>Models 路径 <span style="color:#888;font-size:.8rem">留空自动探测 /v1/models → /models</span></label>
         <input id="f-models-path" placeholder="如: /v1/models 或 /models">
       </div>
+      <div class="field" style="grid-column:1 / -1">
+        <label>Copilot 线路协议 (Wire API) <span style="color:#888;font-size:.8rem">仅 anycopilot 生效；决定 Copilot CLI 与 anycode 通信的格式</span></label>
+        <select id="f-wire-api">
+          <option value="">默认 (Anthropic)</option>
+          <option value="anthropic">Anthropic (/v1/messages)</option>
+          <option value="openai">OpenAI (/v1/chat/completions)</option>
+        </select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
@@ -378,6 +386,7 @@ function openAddBackend() {
   });
   document.getElementById('f-auth').value = 'passthrough';
   document.getElementById('f-thinking').value = '';
+  document.getElementById('f-wire-api').value = '';
   ['opus-effort','sonnet-effort','haiku-effort'].forEach(id => {
     document.getElementById('f-' + id).value = '';
   });
@@ -404,6 +413,7 @@ function openEditBackend(name) {
   document.getElementById('f-haiku').value = b.model_haiku || '';
   document.getElementById('f-haiku-effort').value = b.model_haiku_max_effort || '';
   document.getElementById('f-models-path').value = b.models_path || '';
+  document.getElementById('f-wire-api').value = b.wire_api || '';
   document.getElementById('f-thinking').value = b.thinking_compat === true ? 'true' : b.thinking_compat === false ? 'false' : '';
   document.getElementById('backend-modal').classList.add('open');
 }
@@ -493,6 +503,7 @@ async function saveBackend() {
   const haiku = document.getElementById('f-haiku').value.trim();
   const haikuEffort = document.getElementById('f-haiku-effort').value;
   const modelsPath = document.getElementById('f-models-path').value.trim();
+  const wireApi = document.getElementById('f-wire-api').value;
   const thinkingVal = document.getElementById('f-thinking').value;
 
   if (!name || !display || !url) {
@@ -516,6 +527,7 @@ async function saveBackend() {
     model_haiku: haiku || null,
     model_haiku_max_effort: haikuEffort || null,
     models_path: modelsPath || null,
+    wire_api: wireApi || null,
     thinking_compat,
     thinking_budget_tokens: null,
     pricing: null,

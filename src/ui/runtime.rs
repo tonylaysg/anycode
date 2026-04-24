@@ -29,6 +29,22 @@ use uuid::Uuid;
 const UI_COMMAND_BUFFER: usize = 32;
 const STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Resolve the Copilot BYOK wire type for the active backend in the given
+/// profile. Returns `"anthropic"` or `"openai"`; defaults to `"anthropic"`
+/// when unset or unrecognized.
+fn active_wire_api(config_store: &ConfigStore, cli_mode: CliMode) -> &'static str {
+    let cfg = config_store.get();
+    let profile = cfg.profile(cli_mode);
+    let active = profile
+        .backends
+        .iter()
+        .find(|b| b.name == profile.defaults.active);
+    match active.and_then(|b| b.wire_api.as_deref()) {
+        Some("openai") => "openai",
+        _ => "anthropic",
+    }
+}
+
 pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<String>) -> io::Result<()> {
     let (mut terminal, guard) = setup_terminal()?;
     let tick_rate = Duration::from_millis(250);
@@ -100,7 +116,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
         None, // shim not needed here — we only use session_id from the result
         None, // proxy_port unknown yet — will be updated after try_bind
         is_passthrough,
-        "anthropic", // Copilot BYOK wire type — Phase 4 will wire this from config.
+        active_wire_api(&config_store, cli_mode),
     );
     let current_session_id = spawn.session_id.clone();
 
@@ -548,7 +564,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                             _teammate_shim.as_ref(),
                             Some(proxy_port),
                             is_passthrough,
-                            "anthropic",
+                            active_wire_api(&config_store, cli_mode),
                         );
                         respawn_pty(
                             &mut app,
@@ -582,7 +598,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 let classified = crate::args::classify(&base_raw_args, &registry);
                 let env = if cli_mode.is_copilot() {
                     crate::args::EnvSet::new()
-                        .with_copilot_env(&base_proxy_url, &session_token, "anthropic")
+                        .with_copilot_env(&base_proxy_url, &session_token, active_wire_api(&config_store, cli_mode))
                         .with_settings(app.settings_manager())
                         .with_shim(_teammate_shim.as_ref())
                         .build()
@@ -639,7 +655,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                     cli_args,
                     Some(proxy_port),
                     is_passthrough,
-                    "anthropic",
+                    active_wire_api(&config_store, cli_mode),
                 );
                 respawn_pty(
                     &mut app,

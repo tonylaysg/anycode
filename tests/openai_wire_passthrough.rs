@@ -43,6 +43,7 @@ fn backend_with_sonnet_map(base_url: &str) -> Backend {
         model_haiku: None,
         model_haiku_max_effort: None,
         models_path: None,
+        wire_api: None,
     }
 }
 

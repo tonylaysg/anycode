@@ -80,6 +80,8 @@ pub struct BackendDto {
     pub pricing: Option<BackendPricing>,
     #[serde(default)]
     pub models_path: Option<String>,
+    #[serde(default)]
+    pub wire_api: Option<String>,
 }
 
 /// Full config DTO returned to the browser — api_keys are masked.
@@ -127,6 +129,7 @@ fn profile_to_dto(profile: &CliProfile, profile_key: &str) -> ConfigDto {
             model_haiku_max_effort: b.model_haiku_max_effort.clone(),
             pricing: b.pricing.clone(),
             models_path: b.models_path.clone(),
+            wire_api: b.wire_api.clone(),
         }).collect(),
         agents: profile.agents.clone(),
         profile: Some(profile_key.to_string()),
@@ -163,6 +166,7 @@ fn dto_to_backend(
         model_haiku_max_effort: dto.model_haiku_max_effort.clone(),
         pricing: dto.pricing.clone(),
         models_path: dto.models_path.clone(),
+        wire_api: dto.wire_api.clone(),
     }
 }
 
@@ -350,6 +354,7 @@ pub async fn get_backend(
                 model_haiku_max_effort: b.model_haiku_max_effort.clone(),
                 pricing: b.pricing.clone(),
                 models_path: b.models_path.clone(),
+                wire_api: b.wire_api.clone(),
             };
             Json(dto).into_response()
         }
