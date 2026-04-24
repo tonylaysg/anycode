@@ -195,26 +195,35 @@ async fn handler_logout(State(app): State<AppState>, req: Request<Body>) -> Resp
         .unwrap()
 }
 
-async fn handler_get_config(State(app): State<AppState>) -> Response {
-    api::get_config(State(app.webui)).await.into_response()
+async fn handler_get_config(
+    State(app): State<AppState>,
+    q: axum::extract::Query<api::ProfileQuery>,
+) -> Response {
+    api::get_config(State(app.webui), q).await
 }
 async fn handler_put_config(
     State(app): State<AppState>,
+    q: axum::extract::Query<api::ProfileQuery>,
     json: axum::Json<api::ConfigDto>,
 ) -> Response {
-    api::put_config(State(app.webui), json).await
+    api::put_config(State(app.webui), q, json).await
 }
 async fn handler_post_active(
     State(app): State<AppState>,
+    q: axum::extract::Query<api::ProfileQuery>,
     json: axum::Json<api::ActiveBackendRequest>,
 ) -> Response {
-    api::post_active_backend(State(app.webui), json).await
+    api::post_active_backend(State(app.webui), q, json).await
 }
 async fn handler_get_backend(
     State(app): State<AppState>,
+    q: axum::extract::Query<api::ProfileQuery>,
     path: axum::extract::Path<String>,
 ) -> Response {
-    api::get_backend(State(app.webui), path).await.into_response()
+    api::get_backend(State(app.webui), q, path).await
+}
+async fn handler_get_profiles(State(app): State<AppState>) -> Response {
+    api::get_profiles(State(app.webui)).await.into_response()
 }
 
 async fn auth_mw(State(app): State<AppState>, req: Request<Body>, next: Next) -> Response {
@@ -234,6 +243,7 @@ fn build_router(app: AppState) -> Router {
         .route("/api/config",                   get(handler_get_config).put(handler_put_config))
         .route("/api/config/active",            post(handler_post_active))
         .route("/api/config/backends/{name}",   get(handler_get_backend))
+        .route("/api/profiles",                 get(handler_get_profiles))
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth_mw))
         .with_state(app)
 }

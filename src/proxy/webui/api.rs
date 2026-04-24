@@ -1,19 +1,48 @@
 //! WebUI REST API handlers for configuration management.
+//!
+//! Dual-profile aware: endpoints accept an optional `?profile=claude|copilot`
+//! query parameter. When omitted, the running instance's mode (`cli_mode`) is
+//! used. Hot-updates to `BackendState` only apply when the edited profile
+//! matches the running instance's mode; edits to the other profile are
+//! persisted to disk but take effect on next start of that instance type.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::backend::BackendState;
-use crate::config::{save_config, AgentsConfig, BackendPricing, Config, ConfigStore, Defaults};
+use crate::cli_mode::CliMode;
+use crate::config::{save_config, AgentsConfig, BackendPricing, CliProfile, ConfigStore, Defaults};
 
 /// Shared state for WebUI handlers.
 #[derive(Clone)]
 pub struct WebuiState {
     pub config_store: ConfigStore,
     pub backend_state: BackendState,
+    /// The CLI mode of the running instance that owns this WebUI.
+    /// Used as the default profile when API requests omit `?profile=`.
+    pub cli_mode: CliMode,
+}
+
+// ── Profile query parameter ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ProfileQuery {
+    pub profile: Option<String>,
+}
+
+impl ProfileQuery {
+    /// Resolve the profile name, defaulting to the running instance's cli_mode.
+    fn resolve(&self, cli_mode: CliMode) -> Result<CliMode, String> {
+        match self.profile.as_deref() {
+            None | Some("") => Ok(cli_mode),
+            Some("claude") => Ok(CliMode::Claude),
+            Some("copilot") => Ok(CliMode::Copilot),
+            Some(other) => Err(format!("Invalid profile '{}'. Must be 'claude' or 'copilot'.", other)),
+        }
+    }
 }
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
@@ -59,14 +88,27 @@ pub struct ConfigDto {
     pub backends: Vec<BackendDto>,
     #[serde(default)]
     pub agents: Option<AgentsConfig>,
+    /// Which profile this config belongs to ("claude" or "copilot").
+    /// Ignored on PUT (the URL query param is authoritative).
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Info about available profiles and the running instance's mode.
+#[derive(Debug, Serialize)]
+pub struct ProfilesInfo {
+    /// Profile key of the running instance ("claude" or "copilot").
+    pub current: String,
+    /// All profile keys the WebUI can manage.
+    pub available: Vec<String>,
 }
 
 // ── Conversions ───────────────────────────────────────────────────────────────
 
-fn config_to_dto(config: &Config) -> ConfigDto {
+fn profile_to_dto(profile: &CliProfile, profile_key: &str) -> ConfigDto {
     ConfigDto {
-        defaults: config.claude.defaults.clone(),
-        backends: config.claude.backends.iter().map(|b| BackendDto {
+        defaults: profile.defaults.clone(),
+        backends: profile.backends.iter().map(|b| BackendDto {
             name: b.name.clone(),
             display_name: b.display_name.clone(),
             base_url: b.base_url.clone(),
@@ -83,7 +125,8 @@ fn config_to_dto(config: &Config) -> ConfigDto {
             model_haiku_max_effort: b.model_haiku_max_effort.clone(),
             pricing: b.pricing.clone(),
         }).collect(),
-        agents: config.claude.agents.clone(),
+        agents: profile.agents.clone(),
+        profile: Some(profile_key.to_string()),
     }
 }
 
@@ -119,36 +162,69 @@ fn dto_to_backend(
     }
 }
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
-
-/// GET /api/config — return current config with api_keys masked.
-pub async fn get_config(State(state): State<WebuiState>) -> impl IntoResponse {
-    let config = state.config_store.get();
-    Json(config_to_dto(&config))
+fn profile_key(mode: CliMode) -> &'static str {
+    mode.profile_key()
 }
 
-/// PUT /api/config — replace config, persist to file, hot-reload runtime state.
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+/// GET /api/profiles — return available profiles and the running instance's mode.
+pub async fn get_profiles(State(state): State<WebuiState>) -> impl IntoResponse {
+    Json(ProfilesInfo {
+        current: profile_key(state.cli_mode).to_string(),
+        available: vec!["claude".to_string(), "copilot".to_string()],
+    })
+}
+
+/// GET /api/config?profile=claude|copilot — return current config for a profile.
+pub async fn get_config(
+    State(state): State<WebuiState>,
+    Query(q): Query<ProfileQuery>,
+) -> Response {
+    let target = match q.resolve(state.cli_mode) {
+        Ok(m) => m,
+        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+    let config = state.config_store.get();
+    Json(profile_to_dto(config.profile(target), profile_key(target))).into_response()
+}
+
+/// PUT /api/config?profile=claude|copilot — replace a profile's config.
+///
+/// Always persists to disk. Hot-updates the running BackendState only when
+/// the target profile matches the running instance's cli_mode.
 pub async fn put_config(
     State(state): State<WebuiState>,
+    Query(q): Query<ProfileQuery>,
     Json(dto): Json<ConfigDto>,
 ) -> Response {
+    let target = match q.resolve(state.cli_mode) {
+        Ok(m) => m,
+        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+
     let existing = state.config_store.get();
+    let existing_profile = existing.profile(target);
 
     // Rebuild backends, preserving existing api_keys when not provided.
     let backends: Vec<crate::config::Backend> = dto.backends.iter().map(|d| {
-        let old_key = existing.claude.backends.iter()
+        let old_key = existing_profile.backends.iter()
             .find(|b| b.name == d.name)
             .and_then(|b| b.api_key.clone());
         dto_to_backend(d, old_key)
     }).collect();
 
+    // Start from existing Config and replace only the target profile.
     let mut new_config = existing.clone();
-    new_config.claude.defaults = dto.defaults;
-    new_config.claude.claude_settings = existing.claude.claude_settings.clone();
-    new_config.claude.backends = backends;
-    new_config.claude.agents = dto.agents;
+    {
+        let new_profile = new_config.profile_mut(target);
+        new_profile.defaults = dto.defaults;
+        new_profile.backends = backends;
+        new_profile.agents = dto.agents;
+        // claude_settings is preserved (not editable via this endpoint).
+    }
 
-    if let Err(e) = new_config.validate() {
+    if let Err(e) = new_config.validate_for(target) {
         return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
     }
 
@@ -160,12 +236,16 @@ pub async fn put_config(
     // Reload ConfigStore so in-process reads see the new config.
     let _ = state.config_store.reload();
 
-    // Hot-update BackendState so active routing reflects the new config.
-    if let Err(e) = state.backend_state.update_config(new_config.claude.clone()) {
-        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Config saved but runtime update failed: {e}")).into_response();
+    // Hot-update BackendState only when the edited profile matches this instance.
+    if target == state.cli_mode {
+        let new_profile = new_config.profile(target).clone();
+        if let Err(e) = state.backend_state.update_config(new_profile) {
+            return (StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Config saved but runtime update failed: {e}")).into_response();
+        }
     }
 
-    Json(config_to_dto(&new_config)).into_response()
+    Json(profile_to_dto(new_config.profile(target), profile_key(target))).into_response()
 }
 
 // ── Active backend ─────────────────────────────────────────────────────────────
@@ -175,24 +255,59 @@ pub struct ActiveBackendRequest {
     pub name: String,
 }
 
-/// POST /api/config/active — hot-switch the active backend at runtime.
+/// POST /api/config/active?profile=... — hot-switch the active backend.
+///
+/// Hot-switching is only meaningful for the running instance's profile.
+/// For the other profile, the change is persisted to disk only.
 pub async fn post_active_backend(
     State(state): State<WebuiState>,
+    Query(q): Query<ProfileQuery>,
     Json(req): Json<ActiveBackendRequest>,
 ) -> Response {
-    if let Err(e) = state.backend_state.switch_backend(&req.name) {
-        return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
+    let target = match q.resolve(state.cli_mode) {
+        Ok(m) => m,
+        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
+
+    if target == state.cli_mode {
+        // Hot-switch the running instance's active backend.
+        if let Err(e) = state.backend_state.switch_backend(&req.name) {
+            return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
+        }
     }
+
+    // Persist to disk regardless of whether this is the running mode.
+    let mut config = state.config_store.get();
+    {
+        let profile = config.profile_mut(target);
+        if !profile.backends.iter().any(|b| b.name == req.name) {
+            return (StatusCode::BAD_REQUEST,
+                    format!("Backend '{}' not found in {} profile", req.name, profile_key(target))).into_response();
+        }
+        profile.defaults.active = req.name.clone();
+    }
+    let path = state.config_store.path().to_path_buf();
+    if let Err(e) = save_config(&path, &config) {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    }
+    let _ = state.config_store.reload();
+
     StatusCode::OK.into_response()
 }
 
-/// GET /api/config/backends/:name — return a single backend (api_key masked).
+/// GET /api/config/backends/:name?profile=... — return a single backend (api_key masked).
 pub async fn get_backend(
     State(state): State<WebuiState>,
+    Query(q): Query<ProfileQuery>,
     Path(name): Path<String>,
 ) -> Response {
+    let target = match q.resolve(state.cli_mode) {
+        Ok(m) => m,
+        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+    };
     let config = state.config_store.get();
-    match config.claude.backends.iter().find(|b| b.name == name) {
+    let profile = config.profile(target);
+    match profile.backends.iter().find(|b| b.name == name) {
         Some(b) => {
             let dto = BackendDto {
                 name: b.name.clone(),
@@ -213,6 +328,7 @@ pub async fn get_backend(
             };
             Json(dto).into_response()
         }
-        None => (StatusCode::NOT_FOUND, format!("Backend '{}' not found", name)).into_response(),
+        None => (StatusCode::NOT_FOUND, format!("Backend '{}' not found in {} profile", name, profile_key(target))).into_response(),
     }
 }
+

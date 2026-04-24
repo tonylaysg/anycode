@@ -191,6 +191,7 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
         let webui_state = crate::proxy::webui::WebuiState {
             config_store: config_store.clone(),
             backend_state: proxy_server.backend_state(),
+            cli_mode,
         };
         match async_runtime.block_on(crate::proxy::webui::bind_webui(&webui_cfg.bind_addr)) {
             Ok((webui_addr, webui_listener)) => {

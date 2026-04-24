@@ -454,6 +454,7 @@ fn cmd_webui(bind_override: Option<String>, daemon: bool) -> io::Result<()> {
     let webui_state = anycode::proxy::webui::WebuiState {
         config_store,
         backend_state,
+        cli_mode,
     };
 
     let rt = tokio::runtime::Builder::new_current_thread()

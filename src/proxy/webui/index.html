@@ -64,6 +64,11 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
   <h1>anycode</h1>
   <span class="badge" id="active-badge">加载中...</span>
   <div style="flex:1"></div>
+  <label style="color:#888;font-size:.85rem;margin-right:.4rem">Profile:</label>
+  <select id="profile-select" onchange="onProfileChange()" style="background:#1a1a1a;color:#eee;border:1px solid #333;border-radius:4px;padding:.3rem .6rem;font-size:.85rem;margin-right:.8rem">
+    <option value="claude">Claude Code</option>
+    <option value="copilot">Copilot CLI</option>
+  </select>
   <button class="btn btn-ghost btn-sm" onclick="logout()" style="font-size:.8rem">退出登录</button>
 </div>
 <div class="container">
@@ -193,10 +198,37 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
 <script>
 let config = null;
 let editingBackend = null;
+let currentProfile = 'claude';  // which profile is being edited in the UI
+let runningProfile = 'claude';  // which profile the running instance uses
+
+function profileQS() {
+  return '?profile=' + encodeURIComponent(currentProfile);
+}
+
+async function loadProfiles() {
+  try {
+    const r = await fetch('/api/profiles');
+    if (r.ok) {
+      const info = await r.json();
+      runningProfile = info.current;
+      currentProfile = info.current;
+      const sel = document.getElementById('profile-select');
+      sel.value = currentProfile;
+    }
+  } catch(e) {
+    // fall back to default 'claude'
+  }
+}
+
+async function onProfileChange() {
+  const sel = document.getElementById('profile-select');
+  currentProfile = sel.value;
+  await loadConfig();
+}
 
 async function loadConfig() {
   try {
-    const r = await fetch('/api/config');
+    const r = await fetch('/api/config' + profileQS());
     config = await r.json();
     renderBackends();
     renderDefaults();
@@ -211,7 +243,8 @@ function updateBadge() {
   if (!config) return;
   const active = config.defaults.active;
   const b = config.backends.find(x => x.name === active);
-  el.textContent = '活跃: ' + (b ? b.display_name : active);
+  const running = (currentProfile === runningProfile) ? '' : ' (非运行)';
+  el.textContent = (b ? b.display_name : active) + running;
 }
 
 function renderBackends() {
@@ -269,7 +302,7 @@ async function saveDefaults() {
 
 async function switchBackend(name) {
   try {
-    const r = await fetch('/api/config/active', {
+    const r = await fetch('/api/config/active' + profileQS(), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({name}),
@@ -393,7 +426,7 @@ async function saveBackend() {
 
 async function saveConfig(newConfig, successMsg) {
   try {
-    const r = await fetch('/api/config', {
+    const r = await fetch('/api/config' + profileQS(), {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(newConfig),
@@ -440,7 +473,10 @@ async function logout() {
   location.href = '/login';
 }
 
-loadConfig();
+(async () => {
+  await loadProfiles();
+  await loadConfig();
+})();
 </script>
 </body>
 </html>
