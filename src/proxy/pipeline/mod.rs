@@ -396,7 +396,17 @@ async fn retry_with_body(
     for (name, value) in &headers {
         builder = builder.header(name, value);
     }
-    builder = builder.timeout(config.timeout_config.request);
+    // Only set a total-request timeout for non-streaming retries. Streaming
+    // responses (SSE) must not be clamped by the per-request timeout, or the
+    // stream will be killed mid-flight. We detect streaming by inspecting the
+    // (already transformed) body.
+    let is_streaming = serde_json::from_slice::<serde_json::Value>(&new_body)
+        .ok()
+        .and_then(|v| v.get("stream").and_then(|s| s.as_bool()))
+        .unwrap_or(false);
+    if !is_streaming {
+        builder = builder.timeout(config.timeout_config.request);
+    }
     match builder.body(new_body).send().await {
         Ok(r) => r,
         Err(_) => rebuild_response(orig_status, orig_headers, orig_body),
