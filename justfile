@@ -3,7 +3,7 @@
 # Run all checks (lint + test)
 check:
     @just lint-test-location
-    cargo clippy --all-targets -p anyclaude
+    cargo clippy --all-targets -p anycode
     cargo test
 
 # Ensure no inline #[cfg(test)] in source files
