@@ -565,12 +565,20 @@ pub fn run(cli_mode: CliMode, backend_override: Option<String>, cli_args: Vec<St
                 restart_can_retry = true;
                 let registry = crate::args::flag_registry();
                 let classified = crate::args::classify(&base_raw_args, &registry);
-                let env = crate::args::EnvSet::new()
-                    .with_proxy_url_for_mode(&base_proxy_url, proxy_env_var)
-                    .with_session_token(&session_token)
-                    .with_settings(app.settings_manager())
-                    .with_shim(_teammate_shim.as_ref())
-                    .build();
+                let env = {
+                    let mut env_set = crate::args::EnvSet::new()
+                        .with_proxy_url_for_mode(&base_proxy_url, proxy_env_var);
+                    if proxy_env_var == "COPILOT_API_URL" {
+                        env_set = env_set.with_copilot_env(&base_proxy_url);
+                    } else {
+                        env_set = env_set.with_auth_bypass(is_passthrough);
+                    }
+                    env_set
+                        .with_session_token(&session_token)
+                        .with_settings(app.settings_manager())
+                        .with_shim(_teammate_shim.as_ref())
+                        .build()
+                };
                 let args = crate::args::ArgAssembler::from_passthrough(&classified.args)
                     .with_session_resume(&current_session_id)
                     .with_settings(app.settings_manager())

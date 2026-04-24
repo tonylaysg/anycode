@@ -70,18 +70,18 @@ pub fn build_spawn_params(
     let is_copilot = proxy_env_var == "COPILOT_API_URL";
     let mut env_set = EnvSet::new()
         .with_proxy_url_for_mode(proxy_url, proxy_env_var);
-    // Auth bypass is Claude-specific (injects ANTHROPIC_API_KEY placeholder).
-    if !is_copilot {
+    if is_copilot {
+        // Also intercept Anthropic-SDK calls (sweagent-anthropic agent uses ANTHROPIC_BASE_URL).
+        env_set = env_set.with_copilot_env(proxy_url);
+    } else {
+        // Claude Code: inject auth bypass placeholder so CC skips its login screen.
         env_set = env_set.with_auth_bypass(is_passthrough);
     }
-    let mut env_set = env_set
+    let env = env_set
         .with_session_token(session_token)
         .with_settings(settings)
-        .with_shim(shim);
-    if is_copilot {
-        env_set = env_set.with_copilot_home();
-    }
-    let env = env_set.build();
+        .with_shim(shim)
+        .build();
 
     // Stage 4: Assemble arguments
     let mut assembler = ArgAssembler::from_passthrough(&classified.args)
@@ -139,9 +139,15 @@ pub fn build_restart_params(
     };
 
     // Stage 3: Build environment (with extra)
-    let env = EnvSet::new()
-        .with_proxy_url_for_mode(proxy_url, proxy_env_var)
-        .with_auth_bypass(is_passthrough)
+    let is_copilot = proxy_env_var == "COPILOT_API_URL";
+    let mut env_set = EnvSet::new()
+        .with_proxy_url_for_mode(proxy_url, proxy_env_var);
+    if is_copilot {
+        env_set = env_set.with_copilot_env(proxy_url);
+    } else {
+        env_set = env_set.with_auth_bypass(is_passthrough);
+    }
+    let env = env_set
         .with_session_token(session_token)
         .with_settings(settings)
         .with_shim(shim)

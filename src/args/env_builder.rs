@@ -82,8 +82,21 @@ impl EnvSet {
         self
     }
 
-    /// Inject COPILOT_HOME for data isolation when running in Copilot mode.
-    pub fn with_copilot_home(mut self) -> Self {
+    /// Inject all Copilot-mode env vars:
+    ///
+    /// * `COPILOT_API_URL` — already set by `with_proxy_url_for_mode`; this adds the rest.
+    /// * `ANTHROPIC_BASE_URL` — Copilot CLI's `sweagent-anthropic` agent reads
+    ///   `ANTHROPIC_BASE_URL` (not `COPILOT_API_URL`) for its Anthropic SDK calls.
+    ///   Pointing it at the same proxy lets us intercept those requests too.
+    /// * `ANTHROPIC_API_KEY` — Anthropic SDK requires a non-empty key even when
+    ///   using a custom base URL. A placeholder prevents "no API key" errors.
+    /// * `COPILOT_HOME` — isolates Copilot data from the system-wide installation.
+    pub fn with_copilot_env(mut self, proxy_url: &str) -> Self {
+        // Capture Anthropic-SDK-based traffic (sweagent-anthropic agent).
+        self.vars.push(("ANTHROPIC_BASE_URL".into(), proxy_url.into()));
+        // Placeholder so the Anthropic SDK doesn't refuse to start.
+        self.vars.push(("ANTHROPIC_API_KEY".into(), "anycode-copilot-proxy".into()));
+        // Isolate Copilot home directory.
         if let Some(home) = dirs::home_dir() {
             let copilot_home = home.join(".config/anycode/copilot-home");
             self.vars.push(("COPILOT_HOME".into(), copilot_home.to_string_lossy().into_owned()));
