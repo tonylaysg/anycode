@@ -186,15 +186,34 @@ async fn execute_pipeline_inner(
     // Stage 6: Forward with retry
     let upstream_resp = forward::forward_with_retry(
         &config.http_client,
-        extracted.method,
-        extracted.uri,
-        headers,
-        transformed_body,
+        extracted.method.clone(),
+        extracted.uri.clone(),
+        headers.clone(),
+        transformed_body.clone(),
         is_streaming,
         &backend,
         config,
         ctx,
     ).await?;
+
+    // Stage 6.5: Auto-retry on invalid_reasoning_effort (non-streaming only).
+    // When the backend rejects the effort level, parse its supported values,
+    // cap the effort to the highest supported one, and retry once.
+    let upstream_resp = if !is_streaming && upstream_resp.status().as_u16() == 400 {
+        effort_auto_retry(
+            upstream_resp,
+            &config.http_client,
+            extracted.method,
+            extracted.uri,
+            headers,
+            transformed_body,
+            &backend,
+            config,
+            ctx,
+        ).await
+    } else {
+        upstream_resp
+    };
 
     // Stage 7: Handle response
     let response = response::handle_response(
@@ -207,4 +226,120 @@ async fn execute_pipeline_inner(
     ).await?;
 
     Ok(response)
+}
+
+/// Check a 400 response for `invalid_reasoning_effort` and retry with the
+/// highest effort value the backend actually supports.
+///
+/// Returns `Some(response)` with the retried response (or the original 400 if
+/// the error is unrelated), `None` if parsing or retry fails.
+/// When a 400 response contains `invalid_reasoning_effort`, parse the backend's
+/// supported effort values, cap to the highest one, and retry the request.
+/// For any other 400, return the original response unchanged (reconstructed from body).
+async fn effort_auto_retry(
+    resp: reqwest::Response,
+    client: &reqwest::Client,
+    method: axum::http::Method,
+    uri: axum::http::Uri,
+    headers: Vec<(String, String)>,
+    body_bytes: Vec<u8>,
+    backend: &crate::config::Backend,
+    config: &PipelineConfig,
+    _ctx: &mut PipelineContext,
+) -> reqwest::Response {
+    // Read the 400 body — we consume the response here
+    let status = resp.status();
+    let resp_headers = resp.headers().clone();
+    let body_text = match resp.text().await {
+        Ok(t) => t,
+        Err(_) => return rebuild_response(status, resp_headers, String::new()),
+    };
+
+    // Only handle invalid_reasoning_effort
+    if !body_text.contains("invalid_reasoning_effort") {
+        return rebuild_response(status, resp_headers, body_text);
+    }
+
+    // Parse highest supported effort from error message
+    let max_supported = match parse_max_supported_effort(&body_text) {
+        Some(m) => m,
+        None => return rebuild_response(status, resp_headers, body_text),
+    };
+
+    crate::metrics::app_log(
+        "effort_cap",
+        &format!("Auto-capped effort '{}' -> '{}' for backend '{}'",
+            extract_requested_effort(&body_text).unwrap_or("?"), max_supported, backend.name),
+    );
+
+    // Rewrite body: set output_config.effort to max_supported
+    let new_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+        Ok(mut json) => {
+            json["output_config"]["effort"] = serde_json::json!(max_supported);
+            match serde_json::to_vec(&json) {
+                Ok(b) => b,
+                Err(_) => return rebuild_response(status, resp_headers, body_text),
+            }
+        }
+        Err(_) => return rebuild_response(status, resp_headers, body_text),
+    };
+
+    // Retry with corrected body
+    let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let upstream_uri = format!("{}{}", backend.base_url, path_and_query);
+    let mut builder = client.request(method, &upstream_uri);
+    for (name, value) in &headers {
+        builder = builder.header(name, value);
+    }
+    builder = builder.timeout(config.timeout_config.request);
+
+    match builder.body(new_body).send().await {
+        Ok(r) => r,
+        Err(_) => rebuild_response(status, resp_headers, body_text),
+    }
+}
+
+/// Reconstruct a reqwest::Response from status + body text.
+/// Used to "put back" the 400 when the error isn't effort-related.
+fn rebuild_response(
+    status: reqwest::StatusCode,
+    _headers: reqwest::header::HeaderMap,
+    body: String,
+) -> reqwest::Response {
+    // Build via http crate which reqwest re-exports
+    let http_resp = axum::http::Response::builder()
+        .status(status.as_u16())
+        .body(body.into_bytes())
+        .unwrap_or_default();
+    reqwest::Response::from(http_resp)
+}
+
+/// Extract the requested effort from the error message for logging.
+fn extract_requested_effort(body: &str) -> Option<&str> {
+    // Format: `output_config.effort "xhigh" is not supported`
+    let after_quote = body.find('"')? + 1;
+    let end = body[after_quote..].find('"')? + after_quote;
+    Some(&body[after_quote..end])
+}
+
+/// Parse the highest effort level from an `invalid_reasoning_effort` error message.
+///
+/// Handles formats like:
+///   `"supported values: [medium]"`
+///   `"supported values: [low, medium, high]"`
+fn parse_max_supported_effort(body: &str) -> Option<String> {
+    let start = body.find('[')? + 1;
+    let end = body[start..].find(']')? + start;
+    let list = &body[start..end];
+
+    const RANKS: &[&str] = &["low", "medium", "high", "xhigh"];
+
+    let max = list
+        .split(',')
+        .map(|s| s.trim().trim_matches('"'))
+        .filter_map(|s| RANKS.iter().position(|r| *r == s).map(|rank| (rank, s)))
+        .max_by_key(|(rank, _)| *rank)
+        .map(|(_, s)| s.to_string())?;
+
+    Some(max)
 }
