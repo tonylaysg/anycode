@@ -677,6 +677,17 @@ fn main() -> io::Result<()> {
         let _ = disable_raw_mode();
     }
 
+    // Explicitly print errors to stderr. The TerminalGuard Drop handler runs
+    // before main returns, which restores the terminal (leaves alt-screen,
+    // disables raw mode). That Drop happens when `result` goes out of scope,
+    // not from Termination's auto-print which runs AFTER main returns — so
+    // without this manual eprintln the error would land on a screen that may
+    // have just been cleared by LeaveAlternateScreen in some emulators. Print
+    // it ourselves so users always see what went wrong.
+    if let Err(ref e) = result {
+        eprintln!("\nanycode error: {}", e);
+    }
+
     result
 }
 

@@ -2,6 +2,12 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.3] - 2026-04-24
+
+### Fixes
+
+- **tui**: defensive hardening around terminal setup to prevent silent crashes on exotic terminal emulators. The panic hook is now installed BEFORE any alt-screen / raw-mode side effects, so if `Terminal::new` panics (e.g. size-query failure) the terminal is still restored. Startup now probes terminal size up-front and returns a readable error (`terminal reports zero size …`) instead of silently panicking inside ratatui on first draw — this was the most likely root cause behind "anycopilot 启动后立即退出，终端回到 shell 提示符" in some shells. Errors are also explicitly printed to stderr after the terminal is restored, so diagnostic output is never eaten by a lingering alternate screen.
+
 ## [0.6.2] - 2026-04-26
 
 ### Features

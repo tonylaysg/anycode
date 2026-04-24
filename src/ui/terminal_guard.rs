@@ -52,22 +52,9 @@ impl Drop for TerminalGuard {
 }
 
 pub fn setup_terminal() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, TerminalGuard)> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    // Enable "meta/alt sends escape" — tells terminal to send ESC prefix
-    // when Option/Alt modifies a key (e.g. Option+Backspace → ESC 0x7F).
-    // 1036 = metaSendsEscape, 1039 = altSendsEscape.
-    // Works in most terminals; Warp ignores these in alt-screen mode,
-    // which is handled separately via macOS CGEvent modifier detection.
-    let _ = stdout.write_all(b"\x1b[?1036h\x1b[?1039h");
-    let _ = stdout.flush();
-    stdout.execute(EnterAlternateScreen)?;
-    stdout.execute(EnableBracketedPaste)?;
-    stdout.execute(EnableMouseCapture)?;
-    stdout.execute(Hide)?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let terminal = Terminal::new(backend)?;
+    // Install panic hook and cleanup BEFORE any TTY-altering action.
+    // If Terminal::new or any subsequent setup panics (e.g. size query failure
+    // in exotic terminal emulators), we still want the terminal restored.
     let guard = TerminalGuard::new();
     guard.set_cleanup(|| {
         let mut stdout = io::stdout();
@@ -85,6 +72,56 @@ pub fn setup_terminal() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, Termi
         let _ = stdout.execute(Show);
     });
     guard.install_panic_hook();
+
+    // Sanity-check the terminal size BEFORE entering alt-screen. crossterm's
+    // `size()` returns (0, 0) or errors when stdout is not a real TTY or when
+    // the emulator reports no dimensions. Continuing past this point with a
+    // zero-sized terminal triggers a silent panic inside ratatui's Buffer::new
+    // on the first draw, leaving the terminal in alt-screen with no error
+    // visible to the user. Fail loudly instead.
+    match crossterm::terminal::size() {
+        Ok((w, h)) if w == 0 || h == 0 => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "terminal reports zero size ({}x{}); is stdout a real TTY? \
+                     Try running without redirecting stdout (no pipes to tee/cat), \
+                     inside a real terminal emulator with a sane TERM value.",
+                    w, h
+                ),
+            ));
+        }
+        Err(e) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "failed to query terminal size: {}. \
+                     anycode requires stdout to be a real terminal; \
+                     check TERM (current: {:?}) and avoid piping/redirecting stdout.",
+                    e,
+                    std::env::var("TERM").ok()
+                ),
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    // Enable "meta/alt sends escape" — tells terminal to send ESC prefix
+    // when Option/Alt modifies a key (e.g. Option+Backspace → ESC 0x7F).
+    // 1036 = metaSendsEscape, 1039 = altSendsEscape.
+    // Works in most terminals; Warp ignores these in alt-screen mode,
+    // which is handled separately via macOS CGEvent modifier detection.
+    let _ = stdout.write_all(b"\x1b[?1036h\x1b[?1039h");
+    let _ = stdout.flush();
+    stdout.execute(EnterAlternateScreen)?;
+    stdout.execute(EnableBracketedPaste)?;
+    stdout.execute(EnableMouseCapture)?;
+    stdout.execute(Hide)?;
+
+    let backend = CrosstermBackend::new(stdout);
+    let terminal = Terminal::new(backend)?;
 
     Ok((terminal, guard))
 }
