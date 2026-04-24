@@ -34,31 +34,29 @@ pub struct ModelMapping {
 ///
 /// After the first chunk containing `message_start` is processed, the rewriter
 /// becomes a zero-cost no-op for all subsequent chunks.
+/// Create a stateful chunk rewriter that replaces `model` in streaming
+/// responses back to the original model name.
+///
+/// Handles two wire formats:
+///
+/// * **Anthropic** — model appears once, in the `message_start` event.
+///   After rewriting it, the rewriter becomes a zero-cost no-op.
+/// * **OpenAI** (`chat.completion.chunk`) — model is echoed in every chunk.
+///   The rewriter keeps scanning each chunk until the stream ends, but the
+///   per-chunk fast path skips chunks that don't carry a `model` key at all.
 pub fn make_reverse_model_rewriter(mapping: ModelMapping) -> ChunkRewriter {
-    let mut done = false;
+    let mut anthropic_done = false;
     Box::new(move |bytes: Bytes| {
-        if done {
-            return bytes;
-        }
-
-        // Fast path: skip chunks that don't contain message_start.
-        // Uses byte-level check instead of full parse_sse_events() to avoid
-        // parsing all events only to discard the result.
         let haystack = bytes.as_ref();
-        if !contains_bytes(haystack, b"\"message_start\"") {
+        let has_anthropic_marker = !anthropic_done
+            && contains_bytes(haystack, b"\"message_start\"");
+        // OpenAI wire: every chunk carries "object":"chat.completion.*" plus a model field.
+        let has_openai_marker = contains_bytes(haystack, b"chat.completion")
+            && contains_bytes(haystack, b"\"model\"");
+        if !has_anthropic_marker && !has_openai_marker {
             return bytes;
         }
 
-        // Mark done — message_start appears once per response.
-        done = true;
-
-        // Single-pass: parse SSE lines and rewrite the message_start data line.
-        //
-        // NOTE: This intentionally re-implements SSE line parsing rather than
-        // reusing `sse::parse_sse_events()`. That function discards non-data
-        // lines (event:, empty) and line structure, making it impossible to
-        // reconstruct the original SSE text with modifications. Here we need
-        // in-place transformation with full line reconstruction.
         let text = String::from_utf8_lossy(&bytes);
         let mut result = String::with_capacity(text.len());
         let mut rewritten = false;
@@ -79,13 +77,18 @@ pub fn make_reverse_model_rewriter(mapping: ModelMapping) -> ChunkRewriter {
                         .get("type")
                         .and_then(|t| t.as_str())
                         == Some("message_start");
+                    let is_openai_chunk = json
+                        .get("object")
+                        .and_then(|o| o.as_str())
+                        .is_some_and(|s| s.starts_with("chat.completion"));
+
+                    let mut did_rewrite_here = false;
                     if is_msg_start {
-                        // Rewrite message.model
                         if let Some(msg) = json.get_mut("message") {
                             if let Some(model) = msg.get("model").and_then(|m| m.as_str()) {
                                 if model == mapping.backend {
                                     msg["model"] = serde_json::json!(&mapping.original);
-                                    rewritten = true;
+                                    did_rewrite_here = true;
                                 } else {
                                     crate::metrics::app_log(
                                         "model_map",
@@ -97,6 +100,18 @@ pub fn make_reverse_model_rewriter(mapping: ModelMapping) -> ChunkRewriter {
                                 }
                             }
                         }
+                        anthropic_done = true;
+                    } else if is_openai_chunk {
+                        if let Some(model) = json.get("model").and_then(|m| m.as_str()) {
+                            if model == mapping.backend {
+                                json["model"] = serde_json::json!(&mapping.original);
+                                did_rewrite_here = true;
+                            }
+                        }
+                    }
+
+                    if is_msg_start || is_openai_chunk {
+                        rewritten |= did_rewrite_here;
                         result.push_str("data: ");
                         result.push_str(
                             &serde_json::to_string(&json)
@@ -106,18 +121,10 @@ pub fn make_reverse_model_rewriter(mapping: ModelMapping) -> ChunkRewriter {
                     }
                 }
             }
-            // Non-data lines (event:, empty, ping, etc.) pass through unchanged.
             result.push_str(line);
         }
 
         if rewritten {
-            crate::metrics::app_log(
-                "model_map",
-                &format!(
-                    "Reverse mapped model in message_start: '{}' → '{}'",
-                    mapping.backend, mapping.original
-                ),
-            );
             Bytes::from(result.into_bytes())
         } else {
             bytes
