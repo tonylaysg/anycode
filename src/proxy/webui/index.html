@@ -152,6 +152,16 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#ccc}
           <option value="false">强制关闭</option>
         </select>
       </div>
+      <div class="field">
+        <label>最大 Effort（输出质量上限）</label>
+        <select id="f-max-effort">
+          <option value="">不限制（后端支持的最高等级）</option>
+          <option value="low">low（最低）</option>
+          <option value="medium">medium（中等）</option>
+          <option value="high">high（高）</option>
+          <option value="xhigh">xhigh（最高）</option>
+        </select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">取消</button>
@@ -273,6 +283,7 @@ function openAddBackend() {
   });
   document.getElementById('f-auth').value = 'passthrough';
   document.getElementById('f-thinking').value = '';
+  document.getElementById('f-max-effort').value = '';
   document.getElementById('f-name').disabled = false;
   document.getElementById('backend-modal').classList.add('open');
 }
@@ -293,6 +304,7 @@ function openEditBackend(name) {
   document.getElementById('f-sonnet').value = b.model_sonnet || '';
   document.getElementById('f-haiku').value = b.model_haiku || '';
   document.getElementById('f-thinking').value = b.thinking_compat === true ? 'true' : b.thinking_compat === false ? 'false' : '';
+  document.getElementById('f-max-effort').value = b.max_effort || '';
   document.getElementById('backend-modal').classList.add('open');
 }
 
@@ -310,6 +322,7 @@ async function saveBackend() {
   const sonnet = document.getElementById('f-sonnet').value.trim();
   const haiku = document.getElementById('f-haiku').value.trim();
   const thinkingVal = document.getElementById('f-thinking').value;
+  const maxEffortVal = document.getElementById('f-max-effort').value;
 
   if (!name || !display || !url) {
     document.getElementById('modal-alert').innerHTML = '<div class="alert error">名称、显示名称和 URL 为必填项</div>';
@@ -330,6 +343,7 @@ async function saveBackend() {
     model_haiku: haiku || null,
     thinking_compat,
     thinking_budget_tokens: null,
+    max_effort: maxEffortVal || null,
     pricing: null,
   };
 
