@@ -60,7 +60,7 @@ jobs:
       - name: Rename binary
         shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/anyclaude ${{ matrix.asset_name }}
+          cp target/${{ matrix.target }}/release/anycode ${{ matrix.asset_name }}
           chmod +x ${{ matrix.asset_name }}
 
       - name: Upload artifact
