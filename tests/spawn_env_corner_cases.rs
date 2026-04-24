@@ -355,7 +355,6 @@ false,
 /// Test EnvSet directly to verify proxy URL is set correctly.
 #[test]
 fn env_set_with_proxy_url_directly() {
-    // Ensure no real credentials in env so placeholder is injected
     std::env::remove_var("ANTHROPIC_AUTH_TOKEN");
     std::env::remove_var("ANTHROPIC_API_KEY");
 
@@ -364,13 +363,14 @@ fn env_set_with_proxy_url_directly() {
         .with_auth_bypass(false)
         .build();
 
-    // with_auth_bypass(false) sets ANTHROPIC_API_KEY placeholder + ANTHROPIC_BASE_URL
-    assert_eq!(env.len(), 2);
+    // with_auth_bypass(false) sets ANTHROPIC_AUTH_TOKEN placeholder + clears ANTHROPIC_API_KEY
+    assert_eq!(env.len(), 3);
     assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:4000"));
-    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_API_KEY" && v == "anyclaude-proxy"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_AUTH_TOKEN" && v == "anycode-proxy"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_API_KEY" && v.is_empty()));
 }
 
-/// When ANTHROPIC_AUTH_TOKEN is set, with_proxy_url must NOT inject ANTHROPIC_API_KEY.
+/// Passthrough mode: no credential injection, real credentials forwarded as-is.
 #[test]
 fn env_set_no_api_key_when_auth_token_present() {
     std::env::set_var("ANTHROPIC_AUTH_TOKEN", "real-token");
@@ -383,10 +383,11 @@ fn env_set_no_api_key_when_auth_token_present() {
 
     std::env::remove_var("ANTHROPIC_AUTH_TOKEN"); // restore
 
-    // Passthrough: real credentials are forwarded; no placeholder injected when auth token present
+    // Passthrough: no credentials injected
     assert_eq!(env.len(), 1);
     assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:4000"));
     assert!(!env.iter().any(|(k, _)| k == "ANTHROPIC_API_KEY"));
+    assert!(!env.iter().any(|(k, _)| k == "ANTHROPIC_AUTH_TOKEN"));
 }
 
 /// Test that EnvSet preserves proxy URL when adding shim.

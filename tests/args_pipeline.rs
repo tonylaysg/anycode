@@ -107,7 +107,6 @@ fn env_set_proxy_url() {
 
 #[test]
 fn env_set_chaining() {
-    // Ensure no real credentials in env so placeholder is injected
     std::env::remove_var("ANTHROPIC_AUTH_TOKEN");
     std::env::remove_var("ANTHROPIC_API_KEY");
 
@@ -117,10 +116,11 @@ fn env_set_chaining() {
         .with_extra(vec![("CUSTOM_VAR".into(), "value".into())])
         .build();
 
-    // with_auth_bypass(false) sets ANTHROPIC_API_KEY placeholder; with_proxy_url sets ANTHROPIC_BASE_URL; + CUSTOM_VAR
-    assert_eq!(env.len(), 3);
+    // with_auth_bypass(false): ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + ANTHROPIC_API_KEY(empty) + CUSTOM_VAR
+    assert_eq!(env.len(), 4);
     assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
-    assert!(env.iter().any(|(k, _)| k == "ANTHROPIC_API_KEY"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_AUTH_TOKEN" && v == "anycode-proxy"));
+    assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_API_KEY" && v.is_empty()));
     assert!(env.iter().any(|(k, _)| k == "CUSTOM_VAR"));
 }
 

@@ -39,23 +39,24 @@ impl EnvSet {
     ///   2. Explicitly unset `ANTHROPIC_AUTH_TOKEN` by setting it to empty — prevents
     ///      the "MAuth conflict" warning Claude Code emits when both are set.
     pub fn with_auth_bypass(mut self, is_passthrough: bool) -> Self {
-        let has_auth_token = std::env::var("ANTHROPIC_AUTH_TOKEN")
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
-
         if is_passthrough {
             // For passthrough: real credentials are forwarded by the proxy unchanged.
             // Do not inject a placeholder — if the user has no credentials, let
             // Claude Code show its normal login flow so the user can authenticate.
         } else {
-            // For api_key / bearer: proxy handles all auth.
-            // Inject placeholder key so Claude Code skips login check.
-            self.vars.push(("ANTHROPIC_API_KEY".into(), "anycode-proxy".into()));
-            // If a real auth token is present (e.g., from ~/.bashrc), clear it to
-            // avoid Claude Code's "MAuth conflict" error.
-            if has_auth_token {
-                self.vars.push(("ANTHROPIC_AUTH_TOKEN".into(), String::new()));
-            }
+            // For api_key / bearer: proxy handles all real auth — credentials in
+            // ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN are stripped and replaced
+            // by the proxy before forwarding to the backend.
+            //
+            // Strategy: inject ANTHROPIC_AUTH_TOKEN with a dummy value so that
+            // Claude Code enters "session token" mode and skips its login screen.
+            // Auth-token mode does NOT trigger the "do you want to use this API key?"
+            // confirmation dialog that ANTHROPIC_API_KEY mode does.
+            //
+            // Also clear ANTHROPIC_API_KEY (set to empty) so Claude Code doesn't
+            // see two credential types simultaneously ("MAuth conflict").
+            self.vars.push(("ANTHROPIC_AUTH_TOKEN".into(), "anycode-proxy".into()));
+            self.vars.push(("ANTHROPIC_API_KEY".into(), String::new()));
         }
         self
     }
