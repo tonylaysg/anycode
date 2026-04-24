@@ -2,6 +2,26 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.5.2] - 2026-04-24
+
+### Bug Fixes
+
+- **proxy**: strip entire thinking history when filter removes any block — prevents recurring `400 content[].thinking must be passed back to the API` on Anthropic-compatible backends (DeepSeek, etc.) after a mid-session backend switch
+- **proxy**: don't apply request-total timeout to streaming retries (was causing spurious timeouts on long SSE streams)
+- **config**: auto-detect `thinking_compat` for non-Anthropic backends when unset (was relying on explicit config even when the docstring implied auto)
+- **pty**: switch alacritty screen handle to `Arc<Mutex>` for thread-safety (fixes pre-existing build error in tests)
+- **uninstall**: clean up the `anycopilot` symlink and any legacy `anyclaude` binary alongside the main binary (prevents dangling symlinks after uninstall)
+
+### CI / Release
+
+- **release.yml**: fix binary name after the `anyclaude` → `anycode` rename (the `cp` step was still referencing the old name, which would have broken every tag-triggered release)
+- **install.sh**: point at the `tonylaysg/anycode` repo so prebuilt assets are downloaded directly instead of silently falling back to source compilation
+
+### Documentation
+
+- Document Copilot CLI mode: `anycopilot` symlink, profile selection via `argv[0]`, separate `[claude]` / `[copilot]` config sections
+- Document previously undocumented commands: `reset`, `webui --stop`
+
 ## [0.5.1] - 2026-04-23
 
 ### Bug Fixes
