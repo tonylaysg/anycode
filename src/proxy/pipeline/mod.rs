@@ -165,7 +165,7 @@ async fn execute_pipeline_inner(
     };
 
     // Stage 4: Transform body
-    let (transformed_body, is_streaming, model_mapping) = transform::transform_body(
+    let (transformed_body, is_streaming, model_mapping, thinking_active) = transform::transform_body(
         extracted.body_bytes,
         extracted.parsed_body,
         &backend,
@@ -180,6 +180,7 @@ async fn execute_pipeline_inner(
     let headers = headers::build_headers(
         &extracted.headers,
         &backend,
+        thinking_active,
         ctx,
     )?;
 
@@ -196,10 +197,14 @@ async fn execute_pipeline_inner(
         ctx,
     ).await?;
 
-    // Stage 6.5: Auto-retry on 400 errors (non-streaming only).
-    // Handles: invalid_reasoning_effort → cap to max supported effort
-    //          thinking.type "enabled" not supported → convert to "adaptive"
-    let upstream_resp = if !is_streaming && upstream_resp.status().as_u16() == 400 {
+    // Stage 6.5: Auto-retry on 400 errors (streaming and non-streaming).
+    // A 400 response is always a JSON error body, never a streaming body, so it is
+    // safe to read and retry regardless of whether the request had stream:true.
+    // Handles:
+    //   invalid_reasoning_effort          → cap to max supported effort
+    //   thinking.type "enabled" not supported → convert to "adaptive"
+    //   content[].thinking must be passed → strip thinking entirely
+    let upstream_resp = if upstream_resp.status().as_u16() == 400 {
         backend_400_auto_retry(
             upstream_resp,
             &config.http_client,
@@ -301,6 +306,71 @@ async fn backend_400_auto_retry(
         };
 
         return retry_with_body(client, method, uri, headers, new_body, backend, config, status, resp_headers, body_text).await;
+    }
+
+    // --- Case 3: content[].thinking must be passed back (DeepSeek-style backends) ---
+    // Triggered when thinking mode is enabled but the conversation history has assistant
+    // messages that are missing their thinking blocks (resumed sessions, backend switches).
+    // Fix: strip thinking entirely from both body and headers, then retry.
+    if body_text.contains("content[].thinking") {
+        crate::metrics::app_log(
+            "thinking_compat",
+            &format!("Backend '{}' requires thinking blocks in history but none present; retrying with thinking disabled", backend.name),
+        );
+
+        let new_body = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            Ok(mut json) => {
+                // Remove thinking field from body
+                if let Some(obj) = json.as_object_mut() {
+                    obj.remove("thinking");
+                }
+                // Remove all thinking blocks from message history
+                if let Some(messages) = json.get_mut("messages").and_then(|v| v.as_array_mut()) {
+                    for message in messages.iter_mut() {
+                        if let Some(content) = message.get_mut("content").and_then(|v| v.as_array_mut()) {
+                            content.retain(|item| {
+                                !matches!(
+                                    item.get("type").and_then(|t| t.as_str()),
+                                    Some("thinking") | Some("redacted_thinking")
+                                )
+                            });
+                        }
+                    }
+                }
+                match serde_json::to_vec(&json) {
+                    Ok(b) => b,
+                    Err(_) => return rebuild_response(status, resp_headers, body_text),
+                }
+            }
+            Err(_) => return rebuild_response(status, resp_headers, body_text),
+        };
+
+        // Also strip thinking-related beta header flags
+        let new_headers: Vec<(String, String)> = headers
+            .into_iter()
+            .filter_map(|(name, value)| {
+                if name.to_lowercase() == "anthropic-beta" {
+                    let stripped: String = value
+                        .split(',')
+                        .map(|p| p.trim())
+                        .filter(|p| {
+                            !p.starts_with("adaptive-thinking-")
+                                && !p.starts_with("interleaved-thinking-")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    if stripped.is_empty() {
+                        None // drop header entirely
+                    } else {
+                        Some((name, stripped))
+                    }
+                } else {
+                    Some((name, value))
+                }
+            })
+            .collect();
+
+        return retry_with_body(client, method, uri, new_headers, new_body, backend, config, status, resp_headers, body_text).await;
     }
 
     // Unrecognized 400 — pass through

@@ -1,15 +1,33 @@
 use super::{CursorState, TermCell, TermColor, TerminalEmulator};
-use alacritty_terminal::event::EventListener;
+use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, TermMode};
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Timeout};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Duration;
 
-struct NoOpListener;
+type ClipboardEvents = Arc<Mutex<Vec<String>>>;
 
-impl EventListener for NoOpListener {
-    fn send_event(&self, _event: alacritty_terminal::event::Event) {}
+/// Captures `ClipboardStore` events from the terminal emulator.
+///
+/// OSC 52 sequences (used by child processes to copy to clipboard) are parsed by
+/// `alacritty_terminal` and dispatched as `Event::ClipboardStore`.  This listener
+/// captures them so the emulator can write them to the system clipboard via `arboard`.
+struct CaptureListener {
+    events: ClipboardEvents,
+}
+
+impl EventListener for CaptureListener {
+    fn send_event(&self, event: Event) {
+        if let Event::ClipboardStore(_, text) = event {
+            let trimmed = text.trim().to_string();
+            if !trimmed.is_empty() {
+                self.events.lock().push(trimmed);
+            }
+        }
+    }
 }
 
 /// No-op timeout that disables synchronized output buffering.
@@ -50,8 +68,10 @@ impl Dimensions for TermSize {
 }
 
 pub(super) struct AlacrittyEmulator {
-    term: alacritty_terminal::Term<NoOpListener>,
+    term: alacritty_terminal::Term<CaptureListener>,
     processor: alacritty_terminal::vte::ansi::Processor<NoSyncTimeout>,
+    clipboard_events: ClipboardEvents,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 impl AlacrittyEmulator {
@@ -66,16 +86,32 @@ impl AlacrittyEmulator {
             cols: cols as usize,
         };
 
-        let term = alacritty_terminal::Term::new(config, &size, NoOpListener);
-        let processor = alacritty_terminal::vte::ansi::Processor::default();
+        let clipboard_events: ClipboardEvents = Arc::new(Mutex::new(Vec::new()));
+        let listener = CaptureListener {
+            events: Arc::clone(&clipboard_events),
+        };
 
-        Self { term, processor }
+        let term = alacritty_terminal::Term::new(config, &size, listener);
+        let processor = alacritty_terminal::vte::ansi::Processor::default();
+        let clipboard = arboard::Clipboard::new().ok();
+
+        Self { term, processor, clipboard_events, clipboard }
     }
 }
 
 impl TerminalEmulator for AlacrittyEmulator {
     fn process(&mut self, bytes: &[u8]) {
         self.processor.advance(&mut self.term, bytes);
+
+        // Handle OSC 52 clipboard stores from the child process.
+        // Claude Code uses OSC 52 to copy text to the system clipboard.
+        // `arboard` writes directly; without this, OSC 52 sequences are silently lost.
+        let events = self.clipboard_events.lock().drain(..).collect::<Vec<_>>();
+        if let Some(ref mut clip) = self.clipboard {
+            for text in events {
+                let _ = clip.set_text(text);
+            }
+        }
     }
 
     fn set_size(&mut self, rows: u16, cols: u16) {

@@ -24,13 +24,13 @@ pub fn transform_body(
     backend: &Backend,
     thinking: Option<&ThinkingSession>,
     ctx: &mut PipelineContext,
-) -> Result<(Vec<u8>, bool, Option<ModelMapping>), ProxyError> {
+) -> Result<(Vec<u8>, bool, Option<ModelMapping>, bool), ProxyError> {
     let needs_thinking_compat = backend.needs_thinking_compat();
     let mut model_mapping: Option<ModelMapping> = None;
 
     // If no JSON body, return as-is
     let Some(mut json_body) = parsed_body else {
-        return Ok((body_bytes, false, None));
+        return Ok((body_bytes, false, None, false));
     };
 
     // Detect streaming from body
@@ -98,7 +98,35 @@ pub fn transform_body(
     // 3. Filter thinking blocks (main agent only - ThinkingSession present)
     if let Some(session) = thinking {
         filtered_count = session.filter(&mut json_body);
+
+        // Strip the top-level `thinking` parameter when thinking blocks are absent
+        // from a multi-turn conversation. Without this, Anthropic-compatible backends
+        // (e.g. DeepSeek) return 400: "content[].thinking must be passed back to the API".
+        //
+        // Guard: only strip when assistant messages exist. On the very first turn there
+        // are no assistant messages yet, so `thinking` must be kept for the backend to
+        // start generating thinking blocks.
+        if !has_remaining_thinking_blocks(&json_body) && has_assistant_messages(&json_body) {
+            if json_body.as_object_mut().is_some_and(|obj| obj.remove("thinking").is_some()) {
+                thinking_converted = false;
+                ctx.debug_logger.log_auxiliary(
+                    "thinking_filter",
+                    None,
+                    None,
+                    Some(&format!(
+                        "Removed 'thinking' field: {} block(s) stripped, no thinking blocks \
+                         remain in conversation (backend '{}')",
+                        filtered_count, backend.name
+                    )),
+                    None,
+                );
+            }
+        }
     }
+
+    // Whether thinking is still active in the final body (used by Stage 5 headers).
+    // Ground truth: check the actual body state after all transforms.
+    let thinking_active = json_body.get("thinking").is_some();
 
     // 4. Cap output_config.effort per model family
     if let Some(output_config) = json_body.get("output_config").and_then(|v| v.as_object()) {
@@ -121,8 +149,11 @@ pub fn transform_body(
         }
     }
 
-    // Re-serialize body if any transformation occurred
-    if model_rewritten || thinking_converted || filtered_count > 0 || effort_capped {
+    // Re-serialize body if any transformation occurred.
+    // `thinking_active` is false when we stripped the `thinking` field — that counts as a change.
+    if model_rewritten || thinking_converted || filtered_count > 0 || effort_capped
+        || !thinking_active
+    {
         if thinking_converted {
             let thinking_json = json_body
                 .get("thinking")
@@ -138,19 +169,56 @@ pub fn transform_body(
         }
 
         match serde_json::to_vec(&json_body) {
-            Ok(updated) => Ok((updated, is_streaming_request, model_mapping)),
+            Ok(updated) => Ok((updated, is_streaming_request, model_mapping, thinking_active)),
             Err(e) => {
                 crate::metrics::app_log_error(
                     "upstream",
                     "Failed to serialize transformed request body, using original",
                     &e.to_string(),
                 );
-                Ok((body_bytes, is_streaming_request, model_mapping))
+                Ok((body_bytes, is_streaming_request, model_mapping, thinking_active))
             }
         }
     } else {
-        Ok((body_bytes, is_streaming_request, model_mapping))
+        Ok((body_bytes, is_streaming_request, model_mapping, thinking_active))
     }
+}
+
+/// Returns `true` if the request body still contains thinking or redacted_thinking blocks.
+///
+/// Used after `ThinkingSession::filter` to decide whether the top-level
+/// `thinking` parameter should be stripped (when all blocks were removed).
+fn has_remaining_thinking_blocks(body: &Value) -> bool {
+    let Some(messages) = body.get("messages").and_then(|v| v.as_array()) else {
+        return false;
+    };
+    for message in messages {
+        let Some(content) = message.get("content").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for item in content {
+            let item_type = item.get("type").and_then(|t| t.as_str());
+            if matches!(item_type, Some("thinking") | Some("redacted_thinking")) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Returns `true` if the request body contains any assistant-role messages.
+///
+/// Used to distinguish a first-turn request (no assistant messages yet, `thinking`
+/// must be kept so the backend can start generating thinking blocks) from a
+/// multi-turn resumed session where assistant messages are present but thinking
+/// blocks are absent (inconsistent state that causes DeepSeek-style 400 errors).
+fn has_assistant_messages(body: &Value) -> bool {
+    let Some(messages) = body.get("messages").and_then(|v| v.as_array()) else {
+        return false;
+    };
+    messages
+        .iter()
+        .any(|m| m.get("role").and_then(|r| r.as_str()) == Some("assistant"))
 }
 
 /// Convert `"thinking": {"type": "adaptive"}` to `"thinking": {"type": "enabled", "budget_tokens": N}`.

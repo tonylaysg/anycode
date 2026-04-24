@@ -17,9 +17,13 @@ use crate::proxy::pipeline::PipelineContext;
 /// Stage 5: Build headers for upstream request.
 ///
 /// Returns a Vec of (name, value) pairs to preserve multiple values for the same header name.
+///
+/// `thinking_active`: whether the `thinking` field is still present in the final request body.
+/// Used to decide whether to add or strip thinking-related beta flags for non-Anthropic backends.
 pub fn build_headers(
     incoming_headers: &HeaderMap,
     backend: &Backend,
+    thinking_active: bool,
     ctx: &mut PipelineContext,
 ) -> Result<Vec<(String, String)>, ProxyError> {
     let mut headers: Vec<(String, String)> = Vec::new();
@@ -52,10 +56,18 @@ pub fn build_headers(
             continue;
         }
 
-        // Rewrite anthropic-beta header for non-Anthropic backends
+        // Rewrite anthropic-beta header for non-Anthropic backends.
+        // - thinking_active=true: add interleaved-thinking if not present
+        // - thinking_active=false: strip all thinking-related flags entirely
+        //   so the backend does not enforce thinking-mode rules on a conversation
+        //   that has no thinking blocks (e.g. resumed old session on a new backend).
         if needs_thinking_compat && name_str.eq_ignore_ascii_case("anthropic-beta") {
             if let Ok(val) = value.to_str() {
-                let patched = patch_anthropic_beta_header(val);
+                let patched = if thinking_active {
+                    patch_anthropic_beta_header(val)
+                } else {
+                    strip_thinking_from_beta_header(val)
+                };
                 if patched != val {
                     ctx.debug_logger.log_auxiliary(
                         "thinking_compat",
@@ -65,7 +77,10 @@ pub fn build_headers(
                         None,
                     );
                 }
-                headers.push((name_str.to_string(), patched));
+                if !patched.is_empty() {
+                    headers.push((name_str.to_string(), patched));
+                }
+                // If patched is empty, drop the header entirely (all parts stripped)
                 continue;
             }
         }
@@ -82,6 +97,23 @@ pub fn build_headers(
     }
 
     Ok(headers)
+}
+
+/// Strip all thinking-related flags from the `anthropic-beta` header.
+///
+/// Used when the `thinking` body field was removed (no thinking blocks in the
+/// conversation). Without this, backends like DeepSeek still see the
+/// `interleaved-thinking-*` flag and enforce thinking-mode rules even though
+/// the body no longer requests thinking.
+fn strip_thinking_from_beta_header(value: &str) -> String {
+    let parts: Vec<&str> = value
+        .split(',')
+        .map(|p| p.trim())
+        .filter(|part| {
+            !part.starts_with("adaptive-thinking-") && !part.starts_with("interleaved-thinking-")
+        })
+        .collect();
+    parts.join(",")
 }
 
 /// Rewrite anthropic-beta header for non-Anthropic backends:
