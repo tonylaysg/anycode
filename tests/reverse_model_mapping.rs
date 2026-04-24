@@ -7,7 +7,7 @@
 mod common;
 
 use axum::body::Bytes;
-use anyclaude::proxy::model_rewrite::{
+use anycode::proxy::model_rewrite::{
     make_reverse_model_rewriter, reverse_model_in_response, ModelMapping,
 };
 
@@ -295,11 +295,11 @@ fn response_handles_binary_body() {
 // Integration tests: full proxy pipeline with model mapping
 // ---------------------------------------------------------------------------
 
-use anyclaude::config::{
+use anycode::config::{
     Backend, Config, ConfigStore, DebugLoggingConfig, Defaults, ProxyConfig, TerminalConfig,
 };
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::ProxyServer;
+use anycode::metrics::DebugLogger;
+use anycode::proxy::ProxyServer;
 use common::mock_backend::{MockBackend, MockResponse};
 use reqwest::Client;
 use std::collections::HashMap;
@@ -310,6 +310,13 @@ use std::time::Duration;
 
 fn test_config(backend: Backend, bind_addr: &str) -> Config {
     Config {
+        proxy: ProxyConfig {
+            bind_addr: bind_addr.to_string(),
+            base_url: format!("http://{}", bind_addr),
+        },        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: backend.name.clone(),
             timeout_seconds: 5,
@@ -320,16 +327,14 @@ fn test_config(backend: Backend, bind_addr: &str) -> Config {
             max_retries: 1,
             retry_backoff_base_ms: 10,
         },
-        proxy: ProxyConfig {
-            bind_addr: bind_addr.to_string(),
-            base_url: format!("http://{}", bind_addr),
-        },        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![backend],
         agents: None,
-    }
+    ..Default::default()
+},
+    ..Default::default()
+
+}
 }
 
 fn create_backend_with_model_map(
@@ -351,7 +356,10 @@ fn create_backend_with_model_map(
         model_opus: model_opus.map(String::from),
         model_sonnet: model_sonnet.map(String::from),
         model_haiku: model_haiku.map(String::from),
-    }
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        }
 }
 
 fn create_passthrough_backend(name: &str, base_url: &str) -> Backend {
@@ -367,13 +375,16 @@ fn create_passthrough_backend(name: &str, base_url: &str) -> Backend {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    }
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        }
 }
 
 async fn start_proxy(config: Config) -> (SocketAddr, String, tokio::task::JoinHandle<()>) {
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test-reverse-map.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
     let (proxy_addr, _base_url) = server.try_bind(&config_store).await.unwrap();
     let handle = tokio::spawn(async move {
         let _ = server.run().await;

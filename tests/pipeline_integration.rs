@@ -13,13 +13,13 @@ use std::time::SystemTime;
 use axum::body::Body;
 use axum::http::{header::CONTENT_TYPE, Method, Request};
 
-use anyclaude::backend::{BackendState, AgentRegistry};
-use anyclaude::config::{Backend, Config, DebugLogDestination, DebugLogFormat, DebugLogLevel, DebugLoggingConfig, Defaults};
-use anyclaude::metrics::{DebugLogger, ObservabilityHub, RequestRecord, RequestSpan};
-use anyclaude::proxy::pipeline::{self, PipelineContext, PipelineConfig};
-use anyclaude::proxy::pool::PoolConfig;
-use anyclaude::proxy::thinking::TransformerRegistry;
-use anyclaude::proxy::timeout::TimeoutConfig;
+use anycode::backend::{BackendState, AgentRegistry};
+use anycode::config::{Backend, Config, DebugLogDestination, DebugLogFormat, DebugLogLevel, DebugLoggingConfig, Defaults};
+use anycode::metrics::{DebugLogger, ObservabilityHub, RequestRecord, RequestSpan};
+use anycode::proxy::pipeline::{self, PipelineContext, PipelineConfig};
+use anycode::proxy::pool::PoolConfig;
+use anycode::proxy::thinking::TransformerRegistry;
+use anycode::proxy::timeout::TimeoutConfig;
 
 use common::mock_backend::{MockBackend, MockResponse};
 
@@ -29,6 +29,7 @@ use common::mock_backend::{MockBackend, MockResponse};
 
 fn create_integration_config(mock_base_url: &str) -> Config {
     Config {
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "mock".to_string(),
             timeout_seconds: 5,
@@ -52,10 +53,17 @@ fn create_integration_config(mock_base_url: &str) -> Config {
                 model_opus: None,
                 model_sonnet: Some("mock-sonnet".to_string()),
                 model_haiku: Some("mock-haiku".to_string()),
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
         ],
-        ..Default::default()
-    }
+    ..Default::default()
+},
+    ..Default::default()
+    
+
+}
 }
 
 fn create_pipeline_context() -> PipelineContext {
@@ -120,7 +128,7 @@ async fn test_main_pipeline_json_request() {
     mock.enqueue_response(MockResponse::json(r#"{"id": "msg_123", "model": "mock-sonnet", "content": [{"type": "text", "text": "Hello"}]}"#)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -166,7 +174,7 @@ async fn test_main_pipeline_streaming_request() {
     mock.enqueue_response(MockResponse::sse(&sse_events)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -201,7 +209,7 @@ async fn test_main_pipeline_error_response() {
     mock.enqueue_response(MockResponse::error(429, "Rate limit exceeded")).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -236,12 +244,12 @@ async fn test_teammate_pipeline_no_thinking_session() {
     mock.enqueue_response(MockResponse::json(r#"{"ok": true}"#)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
     // Set up as teammate request
-    ctx.span.record_mut().request_meta = Some(anyclaude::metrics::RequestMeta {
+    ctx.span.record_mut().request_meta = Some(anycode::metrics::RequestMeta {
         method: "POST".to_string(),
         path: "/teammate/agent-1".to_string(),
         query: None,
@@ -280,7 +288,7 @@ async fn test_pipeline_with_backend_override() {
 
     let mut config = create_integration_config(&mock.base_url());
     // Add a second backend
-    config.backends.push(Backend {
+    config.claude.backends.push(Backend {
         name: "override".to_string(),
         display_name: "Override Backend".to_string(),
         base_url: mock.base_url(),
@@ -292,9 +300,12 @@ async fn test_pipeline_with_backend_override() {
         model_opus: None,
         model_sonnet: Some("override-model".to_string()),
         model_haiku: None,
-    });
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        });
 
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -333,7 +344,7 @@ async fn test_pipeline_model_rewrite_and_reverse_mapping() {
     mock.enqueue_response(MockResponse::json(r#"{"id": "msg_123", "model": "mock-sonnet", "content": []}"#)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -375,10 +386,10 @@ async fn test_pipeline_thinking_compat_conversion() {
 
     let mut config = create_integration_config(&mock.base_url());
     // Enable thinking compatibility
-    config.backends[0].thinking_compat = Some(true);
-    config.backends[0].thinking_budget_tokens = Some(5000);
+    config.claude.backends[0].thinking_compat = Some(true);
+    config.claude.backends[0].thinking_budget_tokens = Some(5000);
 
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -417,10 +428,10 @@ async fn test_pipeline_headers_stripping_and_addition() {
 
     let mut config = create_integration_config(&mock.base_url());
     // Use api_key auth to test header stripping
-    config.backends[0].auth_type_str = "api_key".to_string();
-    config.backends[0].api_key = Some("backend-secret-key".to_string());
+    config.claude.backends[0].auth_type_str = "api_key".to_string();
+    config.claude.backends[0].api_key = Some("backend-secret-key".to_string());
 
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -476,7 +487,7 @@ async fn test_pipeline_empty_request_body() {
     mock.enqueue_response(MockResponse::json(r#"{"ok": true}"#)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -504,7 +515,7 @@ async fn test_pipeline_malformed_json_body() {
     mock.enqueue_response(MockResponse::json(r#"{"ok": true}"#)).await;
 
     let config = create_integration_config(&mock.base_url());
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 
@@ -536,10 +547,10 @@ async fn test_pipeline_malformed_json_body() {
 async fn test_pipeline_unconfigured_backend() {
     let mut config = create_integration_config("http://127.0.0.1:59999");
     // Backend with api_key auth but no key configured
-    config.backends[0].auth_type_str = "api_key".to_string();
-    config.backends[0].api_key = None; // Not configured
+    config.claude.backends[0].auth_type_str = "api_key".to_string();
+    config.claude.backends[0].api_key = None; // Not configured
 
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let pipeline_config = create_pipeline_config(backend_state);
     let mut ctx = create_pipeline_context();
 

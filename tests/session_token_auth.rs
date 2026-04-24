@@ -5,8 +5,8 @@
 //! 2. EnvSet builder correctly adds the session token
 //! 3. The session token flows through spawn and restart params
 
-use anyclaude::args::{build_restart_params, build_spawn_params, EnvSet};
-use anyclaude::config::ClaudeSettingsManager;
+use anycode::args::{build_restart_params, build_spawn_params, EnvSet};
+use anycode::config::ClaudeSettingsManager;
 
 /// Test that ANTHROPIC_CUSTOM_HEADERS is set in spawn env
 #[test]
@@ -18,12 +18,13 @@ fn spawn_env_contains_custom_headers_with_session_token() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         session_token,
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Check that ANTHROPIC_CUSTOM_HEADERS contains the session token
     let custom_headers = params
@@ -58,14 +59,15 @@ fn restart_env_contains_custom_headers_with_session_token() {
     let params = build_restart_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         session_token,
         &ClaudeSettingsManager::new(),
         None,
         vec![],
         vec![],
             None,
-false,
-);
+false);
 
     // Check that ANTHROPIC_CUSTOM_HEADERS contains the session token
     let custom_headers = params
@@ -94,7 +96,7 @@ false,
 #[test]
 fn env_set_with_session_token() {
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_session_token("test-token-123")
         .build();
 
@@ -117,12 +119,13 @@ fn spawn_env_has_all_required_vars() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         session_token,
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Should have ANTHROPIC_BASE_URL
     assert!(
@@ -147,14 +150,15 @@ fn restart_env_has_all_required_vars() {
     let params = build_restart_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         session_token,
         &ClaudeSettingsManager::new(),
         None,
         vec![],
         vec![],
             None,
-false,
-);
+false);
 
     // Should have ANTHROPIC_BASE_URL
     assert!(
@@ -173,12 +177,12 @@ false,
 #[test]
 fn different_tokens_produce_different_headers() {
     let env1 = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_session_token("token-1")
         .build();
 
     let env2 = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_session_token("token-2")
         .build();
 
@@ -194,7 +198,7 @@ fn different_tokens_produce_different_headers() {
 #[test]
 fn session_token_format_is_correct() {
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_session_token("my-test-token")
         .build();
 
@@ -204,9 +208,9 @@ fn session_token_format_is_correct() {
 
 // --- Middleware integration tests (real HTTP against ProxyServer) ---
 
-use anyclaude::config::{Config, ConfigStore};
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::ProxyServer;
+use anycode::config::{Config, ConfigStore};
+use anycode::metrics::DebugLogger;
+use anycode::proxy::ProxyServer;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -214,7 +218,7 @@ async fn start_server_with_token(token: Option<String>) -> String {
     let config = Config::default();
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test-session-auth.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, token)
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, token)
         .expect("Failed to create proxy server");
     let (addr, _) = server.try_bind(&config_store).await.expect("Failed to bind");
     let addr_str = format!("{}", addr);

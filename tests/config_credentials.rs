@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::config::{AuthType, Backend, CredentialStatus, SecureString};
+use anycode::config::{AuthType, Backend, CredentialStatus, SecureString};
 
 #[test]
 fn test_auth_type_parsing() {
@@ -54,9 +54,9 @@ fn test_credential_resolution_passthrough() {
         pricing: None,
         thinking_compat: None,
         thinking_budget_tokens: None,
-        model_opus: None,
-        model_sonnet: None,
-        model_haiku: None,
+        model_opus: None, model_opus_max_effort: None,
+        model_sonnet: None, model_sonnet_max_effort: None,
+        model_haiku: None, model_haiku_max_effort: None,
     };
 
     assert!(matches!(

@@ -6,7 +6,7 @@
 use std::process::Command;
 
 fn anyclaude_cmd() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_anyclaude"))
+    Command::new(env!("CARGO_BIN_EXE_anycode"))
 }
 
 #[test]

@@ -2,7 +2,7 @@ mod common;
 
 use std::collections::HashMap;
 
-use anyclaude::config::{ClaudeSettingsManager, SettingId};
+use anycode::config::{ClaudeSettingsManager, SettingId};
 
 #[test]
 fn new_manager_returns_defaults() {

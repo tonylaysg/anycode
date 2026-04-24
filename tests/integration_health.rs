@@ -1,6 +1,6 @@
-use anyclaude::config::{Config, ConfigStore};
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::ProxyServer;
+use anycode::config::{Config, ConfigStore};
+use anycode::metrics::DebugLogger;
+use anycode::proxy::ProxyServer;
 use reqwest::Client;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ async fn test_health_integration() {
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test-config.toml"));
     let session_token = "test-session-token".to_string();
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).expect("Failed to create proxy server");
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).expect("Failed to create proxy server");
 
     // Bind to port before spawning - this prevents race conditions
     let (addr, _base_url) = server.try_bind(&config_store).await.expect("Failed to bind");
@@ -37,7 +37,7 @@ async fn test_health_integration() {
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
 
     assert_eq!(json["status"], "healthy");
-    assert_eq!(json["service"], "anyclaude");
+    assert_eq!(json["service"], "anycode");
 }
 
 #[tokio::test]
@@ -46,7 +46,7 @@ async fn test_request_forwarding() {
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test-config.toml"));
     let session_token = "test-session-token".to_string();
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).expect("Failed to create proxy server");
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).expect("Failed to create proxy server");
 
     // Bind to port before spawning - this prevents race conditions
     let (addr, _base_url) = server.try_bind(&config_store).await.expect("Failed to bind");

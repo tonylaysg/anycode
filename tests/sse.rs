@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::sse::{
+use anycode::sse::{
     analyze_thinking_stream, count_thinking_events, parse_sse_events, ThinkingStreamStats,
 };
 

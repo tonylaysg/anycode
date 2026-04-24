@@ -1,26 +1,27 @@
 //! Integration tests for the args pipeline module.
 
-use anyclaude::args::{
+use anycode::args::{
     classify, flag_registry, build_restart_params, build_spawn_params,
     ArgAssembler, ClassifiedArg, EnvSet, SessionMode, SessionResolution, SessionSource,
 };
-use anyclaude::config::ClaudeSettingsManager;
-use anyclaude::pty::encode_project_path;
+use anycode::config::ClaudeSettingsManager;
+use anycode::pty::encode_project_path;
 
 fn raw_args(args: Vec<&str>) -> Vec<String> {
     args.into_iter().map(String::from).collect()
 }
 
-fn build_spawn(raw_args: &[String]) -> anyclaude::args::SpawnParams {
+fn build_spawn(raw_args: &[String]) -> anycode::args::SpawnParams {
     build_spawn_params(
         raw_args,
         "http://localhost:3000",
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-)
+false)
 }
 
 // =============================================================================
@@ -99,7 +100,7 @@ fn classify_positional() {
 #[test]
 fn env_set_proxy_url() {
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:47190")
+        .with_proxy_url_for_mode("http://127.0.0.1:47190", "ANTHROPIC_BASE_URL")
         .build();
 
     assert!(env.iter().any(|(k, v)| k == "ANTHROPIC_BASE_URL" && v == "http://127.0.0.1:47190"));
@@ -111,7 +112,7 @@ fn env_set_chaining() {
     std::env::remove_var("ANTHROPIC_API_KEY");
 
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:47190")
+        .with_proxy_url_for_mode("http://127.0.0.1:47190", "ANTHROPIC_BASE_URL")
         .with_auth_bypass(false)
         .with_extra(vec![("CUSTOM_VAR".into(), "value".into())])
         .build();
@@ -180,14 +181,15 @@ fn resume_appends_extra_args() {
     let p = build_restart_params(
         &args,
         "http://localhost:3000",
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
         vec![],
         extra,
             None,
-false,
-);
+false);
     assert!(p.args.contains(&"--verbose".to_string()));
     assert!(p.args.contains(&"--resume".to_string()));
 }
@@ -209,14 +211,15 @@ fn restart_merges_extra_env() {
     let p = build_restart_params(
         &args,
         "http://localhost:3000",
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
         extra_env,
         vec![],
             None,
-false,
-);
+false);
     assert!(p.env.iter().any(|(k, _)| k == "ANTHROPIC_BASE_URL"));
     assert!(p.env.iter().any(|(k, v)| k == "FOO" && v == "1"));
 }

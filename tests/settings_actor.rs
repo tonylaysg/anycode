@@ -1,7 +1,7 @@
 mod common;
 
-use anyclaude::config::{SettingId, SettingSection, SettingsFieldSnapshot};
-use anyclaude::ui::settings::{SettingsActor, SettingsDialogState, SettingsIntent};
+use anycode::config::{SettingId, SettingSection, SettingsFieldSnapshot};
+use anycode::ui::settings::{SettingsActor, SettingsDialogState, SettingsIntent};
 use mvi::Store;
 
 fn make_fields() -> Vec<SettingsFieldSnapshot> {

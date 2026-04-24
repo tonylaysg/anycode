@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::clipboard::ClipboardHandler;
+use anycode::clipboard::ClipboardHandler;
 
 #[test]
 fn test_clipboard_handler_creation() {

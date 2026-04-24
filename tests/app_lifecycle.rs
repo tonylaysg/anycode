@@ -2,7 +2,7 @@
 
 mod common;
 
-use anyclaude::ui::pty::{PtyIntent, PtyLifecycleState};
+use anycode::ui::pty::{PtyIntent, PtyLifecycleState};
 use common::*;
 
 // -- Restarting state tests --------------------------------------------------

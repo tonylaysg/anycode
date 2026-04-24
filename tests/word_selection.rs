@@ -1,5 +1,5 @@
-use anyclaude::pty::emulator::{CursorState, TermCell, TermColor, TerminalEmulator};
-use anyclaude::ui::selection::{GridPos, TextSelection};
+use anycode::pty::emulator::{CursorState, TermCell, TermColor, TerminalEmulator};
+use anycode::ui::selection::{GridPos, TextSelection};
 
 // ── Mock emulator ───────────────────────────────────────────────
 

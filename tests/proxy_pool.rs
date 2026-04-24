@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use anyclaude::proxy::pool::PoolConfig;
+use anycode::proxy::pool::PoolConfig;
 
 #[test]
 fn test_default_pool_config() {

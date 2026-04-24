@@ -4,10 +4,10 @@
 
 pub mod mock_backend;
 
-use anyclaude::config::{Config, ConfigStore};
-use anyclaude::pty::emulator::TerminalEmulator;
-use anyclaude::pty::PtyHandle;
-use anyclaude::ui::app::App;
+use anycode::config::{Config, ConfigStore};
+use anycode::pty::emulator::TerminalEmulator;
+use anycode::pty::PtyHandle;
+use anycode::ui::app::App;
 use parking_lot::Mutex;
 use std::net::{SocketAddr, TcpListener};
 use std::path::PathBuf;
@@ -80,7 +80,7 @@ pub async fn wait_for_server(addr: SocketAddr, timeout: Duration) -> bool {
 
 pub fn make_app() -> App {
     let config = ConfigStore::new(Config::default(), PathBuf::from("/tmp/test.toml"));
-    App::new(config)
+    App::new(config, anycode::cli_mode::CliMode::Claude)
 }
 
 
@@ -148,7 +148,7 @@ impl portable_pty::MasterPty for MockMasterPty {
 pub fn make_app_with_pty() -> (App, SpyBuffer, SharedEmulator) {
     let mut app = make_app();
     let emu: SharedEmulator =
-        Arc::new(Mutex::new(anyclaude::pty::emulator::create(24, 80, 0)));
+        Arc::new(Mutex::new(anycode::pty::emulator::create(24, 80, 0)));
     let spy_buf: SpyBuffer = Arc::new(Mutex::new(Vec::new()));
     let writer: Box<dyn std::io::Write + Send> = Box::new(SpyWriter::new(spy_buf.clone()));
     let master: Box<dyn portable_pty::MasterPty + Send> = Box::new(MockMasterPty);

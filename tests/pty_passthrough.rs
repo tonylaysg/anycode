@@ -279,7 +279,7 @@ mod pty_passthrough {
     #[test]
     #[ignore]
     fn benchmark_vt_rendering() {
-        let mut emu = anyclaude::pty::emulator::create(24, 80, 0);
+        let mut emu = anycode::pty::emulator::create(24, 80, 0);
         let payload = b"\x1b[2J\x1b[HThe quick brown fox jumps over the lazy dog\n";
         let iterations = 20_000;
         let start = Instant::now();

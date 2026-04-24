@@ -11,13 +11,13 @@ use axum::body::Body;
 use axum::http::{header::{AUTHORIZATION, CONTENT_TYPE}, HeaderMap, Method, Request};
 use serde_json::json;
 
-use anyclaude::backend::{BackendState, AgentRegistry};
-use anyclaude::config::{Backend, Config, DebugLogDestination, DebugLogFormat, DebugLogLevel, DebugLoggingConfig, Defaults};
-use anyclaude::metrics::{BackendOverride, DebugLogger, ObservabilityHub, RequestRecord, RequestSpan};
-use anyclaude::proxy::pipeline::{self, PipelineContext, PipelineConfig};
-use anyclaude::proxy::pool::PoolConfig;
-use anyclaude::proxy::thinking::TransformerRegistry;
-use anyclaude::proxy::timeout::TimeoutConfig;
+use anycode::backend::{BackendState, AgentRegistry};
+use anycode::config::{Backend, Config, DebugLogDestination, DebugLogFormat, DebugLogLevel, DebugLoggingConfig, Defaults};
+use anycode::metrics::{BackendOverride, DebugLogger, ObservabilityHub, RequestRecord, RequestSpan};
+use anycode::proxy::pipeline::{self, PipelineContext, PipelineConfig};
+use anycode::proxy::pool::PoolConfig;
+use anycode::proxy::thinking::TransformerRegistry;
+use anycode::proxy::timeout::TimeoutConfig;
 
 // =============================================================================
 // Test Helpers
@@ -25,6 +25,7 @@ use anyclaude::proxy::timeout::TimeoutConfig;
 
 fn create_test_config() -> Config {
     Config {
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "test".to_string(),
             timeout_seconds: 5,
@@ -48,7 +49,10 @@ fn create_test_config() -> Config {
                 model_opus: None,
                 model_sonnet: Some("test-sonnet".to_string()),
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
             Backend {
                 name: "anthropic".to_string(),
                 display_name: "Anthropic".to_string(),
@@ -61,7 +65,10 @@ fn create_test_config() -> Config {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
             Backend {
                 name: "openrouter".to_string(),
                 display_name: "OpenRouter".to_string(),
@@ -74,10 +81,17 @@ fn create_test_config() -> Config {
                 model_opus: Some("openrouter-opus".to_string()),
                 model_sonnet: Some("openrouter-sonnet".to_string()),
                 model_haiku: Some("openrouter-haiku".to_string()),
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
         ],
-        ..Default::default()
-    }
+    ..Default::default()
+},
+    ..Default::default()
+    
+
+}
 }
 
 fn create_test_context() -> PipelineContext {
@@ -120,7 +134,7 @@ fn create_test_context() -> PipelineContext {
 #[allow(dead_code)]
 fn create_test_pipeline_config() -> PipelineConfig {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
 
     let agent_registry = AgentRegistry::new();
     let transformer_registry = Arc::new(TransformerRegistry::new());
@@ -234,7 +248,7 @@ async fn test_extract_request_no_content_type() {
 #[test]
 fn test_resolve_backend_active_backend() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -255,7 +269,7 @@ fn test_resolve_backend_active_backend() {
 #[test]
 fn test_resolve_backend_override() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -276,7 +290,7 @@ fn test_resolve_backend_override() {
 #[test]
 fn test_resolve_backend_plugin_override() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -302,7 +316,7 @@ fn test_resolve_backend_plugin_override() {
 #[test]
 fn test_resolve_backend_marker_model() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -323,15 +337,15 @@ fn test_resolve_backend_marker_model() {
 }
 
 #[test]
-fn test_resolve_backend_anyclaude_prefix() {
+fn test_resolve_backend_anycode_prefix() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
 
-    // Use anyclaude- prefix as alternative marker
-    let parsed_body = Some(json!({"model": "anyclaude-anthropic"}));
+    // Use anycode- prefix as alternative marker
+    let parsed_body = Some(json!({"model": "anycode-anthropic"}));
 
     let backend = pipeline::resolve_backend(
         &backend_state,
@@ -348,7 +362,7 @@ fn test_resolve_backend_anyclaude_prefix() {
 #[test]
 fn test_resolve_backend_direct_backend_name() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -371,7 +385,7 @@ fn test_resolve_backend_direct_backend_name() {
 #[test]
 fn test_resolve_backend_missing_backend() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -392,7 +406,7 @@ fn test_resolve_backend_missing_backend() {
 #[test]
 fn test_resolve_backend_priority_plugin_over_teammate() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -418,7 +432,7 @@ fn test_resolve_backend_priority_plugin_over_teammate() {
 #[test]
 fn test_resolve_backend_priority_teammate_over_marker() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -445,7 +459,7 @@ fn test_resolve_backend_priority_teammate_over_marker() {
 #[test]
 fn test_ac_marker_routes_to_backend() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
     // Register subagent identifier → backend mapping (simulates SubagentStart hook)
     registry.register("a1b2c3d4e5f6a7b8", "openrouter");
@@ -473,7 +487,7 @@ fn test_ac_marker_routes_to_backend() {
 #[test]
 fn test_no_ac_marker_uses_active_backend() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -500,7 +514,7 @@ fn test_no_ac_marker_uses_active_backend() {
 #[test]
 fn test_ac_marker_wins_over_marker_model() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
     registry.register("a2b3c4d5e6f7a8b9", "openrouter");
 
@@ -527,7 +541,7 @@ fn test_ac_marker_wins_over_marker_model() {
 #[test]
 fn test_ac_marker_skipped_when_registry_empty() {
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
     // Empty registry — marker parsing is skipped entirely
 
@@ -562,7 +576,7 @@ fn test_create_thinking_always_creates_session() {
     // handled by execute_pipeline (which skips calling create_thinking
     // when backend_override is present).
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let transformer_registry = Arc::new(TransformerRegistry::new());
     let mut ctx = create_test_context();
 
@@ -592,9 +606,12 @@ fn test_transform_body_no_json() {
         model_opus: None,
         model_sonnet: Some("mapped-sonnet".to_string()),
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, is_streaming, mapping) = pipeline::transform_body(
+    let (result, is_streaming, mapping, _) = pipeline::transform_body(
         body_bytes.clone(),
         None,
         &backend,
@@ -627,9 +644,12 @@ fn test_transform_body_model_rewrite() {
         model_opus: None,
         model_sonnet: Some("mapped-sonnet".to_string()),
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, mapping) = pipeline::transform_body(
+    let (result, _, mapping, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -664,9 +684,12 @@ fn test_transform_body_thinking_compat_adaptive_to_enabled() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -700,9 +723,12 @@ fn test_transform_body_thinking_compat_no_adaptive() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -736,9 +762,12 @@ fn test_transform_body_no_thinking_compat() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes.clone(),
         Some(body_json),
         &backend,
@@ -760,7 +789,7 @@ fn test_transform_body_streaming_detection() {
     let mut ctx = create_test_context();
     let backend = Backend::default();
 
-    let (_, is_streaming, _) = pipeline::transform_body(
+    let (_, is_streaming, _, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -790,7 +819,7 @@ fn test_transform_body_thinking_filtering() {
     let backend = Backend::default();
 
     // Without thinking session, no filtering occurs
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes.clone(),
         Some(body_json.clone()),
         &backend,
@@ -824,9 +853,12 @@ fn test_transform_body_budget_calculation_from_max_tokens() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -859,9 +891,12 @@ fn test_transform_body_budget_default_when_no_max_tokens() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, _) = pipeline::transform_body(
+    let (result, _, _, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,
@@ -886,7 +921,7 @@ fn test_build_headers_basic() {
     let mut ctx = create_test_context();
     let backend = Backend::default(); // passthrough auth
 
-    let result = pipeline::build_headers(&headers, &backend, &mut ctx).unwrap();
+    let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
 
     // Should contain our custom headers
     assert!(result.iter().any(|(k, _)| k == "content-type"));
@@ -917,9 +952,12 @@ fn test_build_headers_strips_auth_for_own_credentials() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let result = pipeline::build_headers(&headers, &backend, &mut ctx).unwrap();
+    let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
 
     // Count auth headers - should only have the backend's auth, not client's
     let auth_count = result.iter().filter(|(k, _)| k.eq_ignore_ascii_case("authorization")).count();
@@ -950,9 +988,12 @@ fn test_build_headers_passthrough_keeps_auth() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let result = pipeline::build_headers(&headers, &backend, &mut ctx).unwrap();
+    let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
 
     // Should keep client auth headers in passthrough mode
     let auth_header = result.iter().find(|(k, _)| k.eq_ignore_ascii_case("authorization"));
@@ -979,9 +1020,12 @@ fn test_build_headers_patches_anthropic_beta() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let result = pipeline::build_headers(&headers, &backend, &mut ctx).unwrap();
+    let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
 
     let beta_header = result.iter().find(|(k, _)| k.eq_ignore_ascii_case("anthropic-beta"));
     assert!(beta_header.is_some());
@@ -1016,9 +1060,12 @@ fn test_build_headers_no_anthropic_beta_patch_for_anthropic() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let result = pipeline::build_headers(&headers, &backend, &mut ctx).unwrap();
+    let result = pipeline::build_headers(&headers, &backend, true, &mut ctx).unwrap();
 
     let beta_header = result.iter().find(|(k, _)| k.eq_ignore_ascii_case("anthropic-beta"));
     assert!(beta_header.is_some());
@@ -1113,7 +1160,10 @@ fn test_corner_case_model_family_detection_case_sensitive() {
         model_opus: Some("openrouter-opus".to_string()),
         model_sonnet: Some("openrouter-sonnet".to_string()),
         model_haiku: Some("openrouter-haiku".to_string()),
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     for (model, expected) in test_cases {
         let result = backend.resolve_model(model);
@@ -1153,9 +1203,12 @@ fn test_corner_case_budget_tokens_with_small_max_tokens() {
             model_opus: None,
             model_sonnet: None,
             model_haiku: None,
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
         };
 
-        let (result, _, _) = pipeline::transform_body(
+        let (result, _, _, _) = pipeline::transform_body(
             body_bytes,
             Some(body_json),
             &backend,
@@ -1178,7 +1231,7 @@ fn test_corner_case_budget_tokens_with_small_max_tokens() {
 fn test_corner_case_invalid_marker_model() {
     // Marker model pointing to non-existent backend should fall through
     let config = create_test_config();
-    let backend_state = BackendState::from_config(config).unwrap();
+    let backend_state = BackendState::from_config(config.claude.clone()).unwrap();
     let registry = AgentRegistry::new();
 
     let mut ctx = create_test_context();
@@ -1220,9 +1273,12 @@ fn test_corner_case_empty_model_string() {
         model_opus: None,
         model_sonnet: Some("mapped-sonnet".to_string()),
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
-    let (result, _, mapping) = pipeline::transform_body(
+    let (result, _, mapping, _) = pipeline::transform_body(
         body_bytes,
         Some(body_json),
         &backend,

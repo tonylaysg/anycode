@@ -2,7 +2,7 @@ mod common;
 
 use std::collections::VecDeque;
 
-use anyclaude::ui::pty::PtyLifecycleState;
+use anycode::ui::pty::PtyLifecycleState;
 
 #[test]
 fn default_is_pending() {

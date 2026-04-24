@@ -6,8 +6,8 @@
 //! - `notify_backend_switch()` invalidation
 //! - Concurrent session safety
 
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::thinking::TransformerRegistry;
+use anycode::metrics::DebugLogger;
+use anycode::proxy::thinking::TransformerRegistry;
 use std::sync::Arc;
 
 fn make_registry() -> Arc<TransformerRegistry> {
@@ -400,23 +400,23 @@ fn register_from_response_no_thinking_blocks() {
 // SSE thinking block registration
 // ---------------------------------------------------------------------------
 
-fn make_sse_events(thinking_text: &str) -> Vec<anyclaude::sse::SseEvent> {
+fn make_sse_events(thinking_text: &str) -> Vec<anycode::sse::SseEvent> {
     vec![
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!({
                 "index": 0,
                 "content_block": {"type": "thinking", "thinking": ""}
             }),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_delta".to_string(),
             data: serde_json::json!({
                 "index": 0,
                 "delta": {"type": "thinking_delta", "thinking": thinking_text}
             }),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_stop".to_string(),
             data: serde_json::json!({"index": 0}),
         },
@@ -468,12 +468,12 @@ fn register_from_sse_malformed_events_no_panic() {
 
     let malformed = vec![
         // Missing content_block field
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!({"index": 0}),
         },
         // Delta without prior start
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_delta".to_string(),
             data: serde_json::json!({
                 "index": 99,
@@ -481,17 +481,17 @@ fn register_from_sse_malformed_events_no_panic() {
             }),
         },
         // Stop without prior start
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_stop".to_string(),
             data: serde_json::json!({"index": 99}),
         },
         // Unknown event type
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "unknown_event".to_string(),
             data: serde_json::json!({"foo": "bar"}),
         },
         // Empty data
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!(null),
         },
@@ -510,33 +510,33 @@ fn register_from_sse_multiple_blocks() {
 
     let events = vec![
         // Block 0
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!({"index": 0, "content_block": {"type": "thinking", "thinking": ""}}),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_delta".to_string(),
             data: serde_json::json!({"index": 0, "delta": {"type": "thinking_delta", "thinking": "first thought"}}),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_stop".to_string(),
             data: serde_json::json!({"index": 0}),
         },
         // Block 1 (text, should be skipped)
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!({"index": 1, "content_block": {"type": "text", "text": ""}}),
         },
         // Block 2 (another thinking)
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_start".to_string(),
             data: serde_json::json!({"index": 2, "content_block": {"type": "thinking", "thinking": ""}}),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_delta".to_string(),
             data: serde_json::json!({"index": 2, "delta": {"type": "thinking_delta", "thinking": "second thought"}}),
         },
-        anyclaude::sse::SseEvent {
+        anycode::sse::SseEvent {
             event_type: "content_block_stop".to_string(),
             data: serde_json::json!({"index": 2}),
         },

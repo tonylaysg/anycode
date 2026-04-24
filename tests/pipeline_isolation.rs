@@ -6,12 +6,12 @@
 
 mod common;
 
-use anyclaude::config::{
+use anycode::config::{
     AgentsConfig, Backend, Config, ConfigStore, DebugLoggingConfig, Defaults, ProxyConfig,
     TerminalConfig,
 };
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::ProxyServer;
+use anycode::metrics::DebugLogger;
+use anycode::proxy::ProxyServer;
 use common::mock_backend::{MockBackend, MockResponse};
 use reqwest::Client;
 use std::collections::HashMap;
@@ -32,7 +32,10 @@ fn create_backend(name: &str, base_url: &str) -> Backend {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    }
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        }
 }
 
 fn config_with_teams(
@@ -41,6 +44,13 @@ fn config_with_teams(
     agents: Option<AgentsConfig>,
 ) -> Config {
     Config {
+        proxy: ProxyConfig {
+            bind_addr: bind_addr.to_string(),
+            base_url: format!("http://{}", bind_addr),
+        },        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: backends.first().map(|b| b.name.clone()).unwrap_or_default(),
             timeout_seconds: 5,
@@ -51,29 +61,27 @@ fn config_with_teams(
             max_retries: 1,
             retry_backoff_base_ms: 10,
         },
-        proxy: ProxyConfig {
-            bind_addr: bind_addr.to_string(),
-            base_url: format!("http://{}", bind_addr),
-        },        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends,
         agents,
-    }
+    ..Default::default()
+},
+    ..Default::default()
+
+}
 }
 
 struct TestHarness {
     proxy_addr: std::net::SocketAddr,
     client: Client,
-    _handle: anyclaude::proxy::ProxyHandle,
+    _handle: anycode::proxy::ProxyHandle,
 }
 
 impl TestHarness {
     async fn start(config: Config) -> Self {
         let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test.toml"));
         let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-        let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+        let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
         let (proxy_addr, _) = server.try_bind(&config_store).await.unwrap();
         let handle = server.handle();
         tokio::spawn(async move { let _ = server.run().await; });
@@ -385,7 +393,7 @@ async fn teammate_requests_dont_increment_thinking_session() {
     );
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
     let (proxy_addr, _) = server.try_bind(&config_store).await.unwrap();
     let registry = server.transformer_registry();
     let handle = server.handle();
@@ -491,7 +499,7 @@ async fn backend_switch_doesnt_affect_teammate_routing() {
     );
     let config_store = ConfigStore::new(config, PathBuf::from("/tmp/test.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
     let backend_state = server.backend_state();
     let (proxy_addr, _) = server.try_bind(&config_store).await.unwrap();
     let handle = server.handle();

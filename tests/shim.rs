@@ -4,7 +4,7 @@ mod common;
 
 use std::path::Path;
 
-use anyclaude::shim::TeammateShim;
+use anycode::shim::TeammateShim;
 
 fn shim_dir(shim: &TeammateShim) -> String {
     shim.path_env().1.split(':').next().unwrap().to_string()

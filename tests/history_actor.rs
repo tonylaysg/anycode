@@ -2,7 +2,7 @@ mod common;
 
 use std::time::SystemTime;
 
-use anyclaude::ui::history::{
+use anycode::ui::history::{
     HistoryActor, HistoryDialogState, HistoryEntry, HistoryIntent, MAX_VISIBLE_ROWS,
 };
 use mvi::Store;

@@ -2,8 +2,8 @@ mod common;
 
 use std::time::Duration;
 
-use anyclaude::config::Defaults;
-use anyclaude::proxy::timeout::TimeoutConfig;
+use anycode::config::Defaults;
+use anycode::proxy::timeout::TimeoutConfig;
 
 #[test]
 fn test_default_timeouts() {

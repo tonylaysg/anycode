@@ -2,7 +2,7 @@ mod common;
 
 use std::collections::VecDeque;
 
-use anyclaude::ui::pty::{PtyActor, PtyIntent, PtyLifecycleState};
+use anycode::ui::pty::{PtyActor, PtyIntent, PtyLifecycleState};
 use mvi::Store;
 
 fn store() -> Store<PtyActor> {

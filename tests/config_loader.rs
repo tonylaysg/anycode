@@ -1,4 +1,4 @@
-use anyclaude::config::{
+use anycode::config::{
     build_auth_header, AgentsConfig, AuthType, Backend, Config, ConfigError,
     CredentialStatus, DebugLoggingConfig, Defaults, ProxyConfig, TerminalConfig,
 };
@@ -10,17 +10,17 @@ fn test_config_default_values() {
     let config = Config::default();
 
     // Defaults
-    assert_eq!(config.defaults.active, "claude");
-    assert_eq!(config.defaults.timeout_seconds, 30);
-    assert_eq!(config.defaults.pool_idle_timeout_seconds, 90);
-    assert_eq!(config.defaults.pool_max_idle_per_host, 8);
-    assert_eq!(config.defaults.max_retries, 3);
-    assert_eq!(config.defaults.retry_backoff_base_ms, 100);
+    assert_eq!(config.claude.defaults.active, "claude");
+    assert_eq!(config.claude.defaults.timeout_seconds, 30);
+    assert_eq!(config.claude.defaults.pool_idle_timeout_seconds, 90);
+    assert_eq!(config.claude.defaults.pool_max_idle_per_host, 8);
+    assert_eq!(config.claude.defaults.max_retries, 3);
+    assert_eq!(config.claude.defaults.retry_backoff_base_ms, 100);
 
     // Should have exactly one backend
-    assert_eq!(config.backends.len(), 1);
+    assert_eq!(config.claude.backends.len(), 1);
 
-    let backend = &config.backends[0];
+    let backend = &config.claude.backends[0];
     assert_eq!(backend.name, "claude");
     assert_eq!(backend.display_name, "Claude");
     assert_eq!(backend.base_url, "https://api.anthropic.com");
@@ -33,14 +33,14 @@ fn test_config_default_values() {
 #[test]
 fn test_config_path_ends_with_expected() {
     let path = Config::config_path();
-    assert!(path.ends_with("anyclaude/config.toml"));
+    assert!(path.ends_with("anycode/config.toml"));
 }
 
 /// Test validation passes for default config when api_key is set.
 #[test]
 fn test_validation_passes_for_default() {
     let mut config = Config::default();
-    config.backends[0].api_key = Some("test-key".to_string());
+    config.claude.backends[0].api_key = Some("test-key".to_string());
     let result = config.validate();
     assert!(result.is_ok());
 }
@@ -49,22 +49,27 @@ fn test_validation_passes_for_default() {
 #[test]
 fn test_validation_fails_empty_backends() {
     let config = Config {
-        defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
+        defaults: Defaults::default(),
         claude_settings: HashMap::new(),
         backends: vec![],
         agents: None,
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     let result = config.validate();
     assert!(result.is_err());
 
     match result.unwrap_err() {
         ConfigError::ValidationError { message } => {
-            assert!(message.contains("At least one backend"));
+            assert!(message.contains("No backends configured"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -74,6 +79,11 @@ fn test_validation_fails_empty_backends() {
 #[test]
 fn test_validation_fails_missing_active_backend() {
     let config = Config {
+        proxy: ProxyConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "nonexistent".to_string(),
             timeout_seconds: 30,
@@ -84,14 +94,14 @@ fn test_validation_fails_missing_active_backend() {
             max_retries: 3,
             retry_backoff_base_ms: 100,
         },
-        proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![Backend::default()],
         agents: None,
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     let result = config.validate();
     assert!(result.is_err());
@@ -109,11 +119,11 @@ fn test_validation_fails_missing_active_backend() {
 #[test]
 fn test_parse_valid_toml() {
     let toml_content = r#"
-[defaults]
+[claude.defaults]
 active = "claude"
 timeout_seconds = 60
 
-[[backends]]
+[[claude.backends]]
 name = "claude"
 display_name = "Claude"
 base_url = "https://api.anthropic.com"
@@ -123,9 +133,9 @@ api_key = "test-key-123"
 
     let config: Config = toml::from_str(toml_content).expect("Should parse valid TOML");
 
-    assert_eq!(config.defaults.active, "claude");
-    assert_eq!(config.defaults.timeout_seconds, 60);
-    assert_eq!(config.backends.len(), 1);
+    assert_eq!(config.claude.defaults.active, "claude");
+    assert_eq!(config.claude.defaults.timeout_seconds, 60);
+    assert_eq!(config.claude.backends.len(), 1);
 }
 
 /// Test that invalid TOML produces a parse error.
@@ -144,13 +154,13 @@ fn test_config_roundtrip() {
     let serialized = toml::to_string(&original).expect("Should serialize");
     let deserialized: Config = toml::from_str(&serialized).expect("Should deserialize");
 
-    assert_eq!(original.defaults.active, deserialized.defaults.active);
+    assert_eq!(original.claude.defaults.active, deserialized.claude.defaults.active);
     assert_eq!(
-        original.defaults.timeout_seconds,
-        deserialized.defaults.timeout_seconds
+        original.claude.defaults.timeout_seconds,
+        deserialized.claude.defaults.timeout_seconds
     );
-    assert_eq!(original.backends.len(), deserialized.backends.len());
-    assert_eq!(original.backends[0].name, deserialized.backends[0].name);
+    assert_eq!(original.claude.backends.len(), deserialized.claude.backends.len());
+    assert_eq!(original.claude.backends[0].name, deserialized.claude.backends[0].name);
 }
 
 // ============================================================================
@@ -172,7 +182,10 @@ fn test_backend_is_configured_with_api_key() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     assert!(backend.is_configured());
 }
@@ -192,7 +205,10 @@ fn test_backend_not_configured_without_api_key() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     assert!(!backend.is_configured());
 }
@@ -212,7 +228,10 @@ fn test_backend_passthrough_always_configured() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     assert!(backend.is_configured());
     assert!(matches!(
@@ -236,7 +255,10 @@ fn test_build_auth_header_api_key() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     let header = build_auth_header(&backend);
     assert!(header.is_some());
@@ -261,7 +283,10 @@ fn test_build_auth_header_bearer() {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    };
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        };
 
     let header = build_auth_header(&backend);
     assert!(header.is_some());
@@ -275,6 +300,11 @@ fn test_build_auth_header_bearer() {
 #[test]
 fn test_validation_fails_unconfigured_active_backend() {
     let config = Config {
+        proxy: ProxyConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "unconfigured".to_string(),
             timeout_seconds: 30,
@@ -285,10 +315,6 @@ fn test_validation_fails_unconfigured_active_backend() {
             max_retries: 3,
             retry_backoff_base_ms: 100,
         },
-        proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![Backend {
             name: "unconfigured".to_string(),
@@ -302,9 +328,16 @@ fn test_validation_fails_unconfigured_active_backend() {
             model_opus: None,
             model_sonnet: None,
             model_haiku: None,
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
         }],
         agents: None,
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     let result = config.validate();
     assert!(result.is_err());
@@ -322,18 +355,23 @@ fn test_validation_fails_unconfigured_active_backend() {
 #[test]
 fn test_validation_fails_invalid_teammate_backend() {
     let config = Config {
-        defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
+        defaults: Defaults::default(),
         claude_settings: HashMap::new(),
         backends: vec![Backend::default()],
         agents: Some(AgentsConfig {
             teammate_backend: "nonexistent".to_string(),
             subagent_backend: None,
         }),
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     let result = config.validate();
     assert!(result.is_err());
@@ -356,23 +394,23 @@ fn test_validation_fails_invalid_teammate_backend_from_toml() {
     std::fs::write(
         &path,
         r#"
-[defaults]
+[claude.defaults]
 active = "claude"
 timeout_seconds = 30
 
-[[backends]]
+[[claude.backends]]
 name = "claude"
 display_name = "Claude"
 base_url = "https://api.anthropic.com"
 auth_type = "passthrough"
 
-[agents]
+[claude.agents]
 teammate_backend = "nonexistent"
 "#,
     )
     .unwrap();
 
-    let result = Config::load_from(&path);
+    let result = Config::load_from(&path).and_then(|c| c.validate().map(|_| c));
     assert!(result.is_err(), "should reject nonexistent teammate_backend");
     let err = result.unwrap_err().to_string();
     assert!(err.contains("nonexistent"), "got: {err}");
@@ -382,18 +420,23 @@ teammate_backend = "nonexistent"
 #[test]
 fn test_validation_passes_valid_teammate_backend() {
     let config = Config {
-        defaults: Defaults::default(),
         proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
         terminal: TerminalConfig::default(),
         debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
+        defaults: Defaults::default(),
         claude_settings: HashMap::new(),
         backends: vec![Backend::default()],
         agents: Some(AgentsConfig {
             teammate_backend: "claude".to_string(),
             subagent_backend: None,
         }),
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     assert!(config.validate().is_ok());
 }
@@ -402,6 +445,11 @@ fn test_validation_passes_valid_teammate_backend() {
 #[test]
 fn test_configured_backends_filters_correctly() {
     let config = Config {
+        proxy: ProxyConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "configured".to_string(),
             timeout_seconds: 30,
@@ -412,10 +460,6 @@ fn test_configured_backends_filters_correctly() {
             max_retries: 3,
             retry_backoff_base_ms: 100,
         },
-        proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![
             Backend {
@@ -430,7 +474,10 @@ fn test_configured_backends_filters_correctly() {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
             Backend {
                 name: "unconfigured".to_string(),
                 display_name: "Unconfigured".to_string(),
@@ -443,7 +490,10 @@ fn test_configured_backends_filters_correctly() {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
             Backend {
                 name: "passthrough".to_string(),
                 display_name: "Passthrough".to_string(),
@@ -456,10 +506,17 @@ fn test_configured_backends_filters_correctly() {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
         ],
         agents: None,
-    };
+    ..Default::default()
+},
+    ..Default::default()
+
+};
 
     let configured = config.configured_backends();
 
@@ -487,7 +544,10 @@ fn glm_backend() -> Backend {
         model_opus: Some("glm-4.7".to_string()),
         model_sonnet: Some("glm-4.7".to_string()),
         model_haiku: Some("glm-4.5-air".to_string()),
-    }
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        }
 }
 
 #[test]
@@ -531,7 +591,7 @@ fn resolve_model_partial_map() {
     let b = Backend {
         model_opus: Some("mapped-opus".to_string()),
         ..Backend::default()
-    };
+        };
     assert_eq!(b.resolve_model("claude-opus-4-6"), Some("mapped-opus"));
     assert_eq!(b.resolve_model("claude-sonnet-4-5-20250929"), None);
     assert_eq!(b.resolve_model("claude-haiku-4-5-20251001"), None);
@@ -540,11 +600,11 @@ fn resolve_model_partial_map() {
 #[test]
 fn resolve_model_toml_parsing() {
     let toml_content = r#"
-[defaults]
+[claude.defaults]
 active = "glm"
 timeout_seconds = 30
 
-[[backends]]
+[[claude.backends]]
 name = "glm"
 display_name = "GLM"
 base_url = "https://open.bigmodel.cn/api/paas/v4"
@@ -554,7 +614,7 @@ model_opus = "glm-4.7"
 model_haiku = "glm-4.5-air"
 "#;
     let config: Config = toml::from_str(toml_content).expect("Should parse");
-    let b = &config.backends[0];
+    let b = &config.claude.backends[0];
     assert_eq!(b.resolve_model("claude-opus-4-6"), Some("glm-4.7"));
     assert_eq!(b.resolve_model("claude-sonnet-4-5-20250929"), None);
     assert_eq!(b.resolve_model("claude-haiku-4-5-20251001"), Some("glm-4.5-air"));

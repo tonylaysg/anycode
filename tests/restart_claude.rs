@@ -2,10 +2,10 @@
 
 mod common;
 
-use anyclaude::ui::app::{PopupKind, UiCommand};
-use anyclaude::ui::input::{classify_key, InputAction};
-use anyclaude::ui::pty::PtyLifecycleState;
-use anyclaude::ui::selection::GridPos;
+use anycode::ui::app::{PopupKind, UiCommand};
+use anycode::ui::input::{classify_key, InputAction};
+use anycode::ui::pty::PtyLifecycleState;
+use anycode::ui::selection::GridPos;
 use common::*;
 use term_input::{KeyInput, KeyKind};
 use tokio::sync::mpsc;
@@ -17,8 +17,8 @@ fn request_restart_transitions_to_restarting() {
     app.set_ipc_sender(tx);
 
     // Get to Ready state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     app.request_restart_claude();
@@ -47,8 +47,8 @@ fn request_restart_without_sender_reverts_to_spawn_failed() {
     // No IPC sender set — send_command will fail
 
     // Get to Ready
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     app.request_restart_claude();
@@ -68,7 +68,7 @@ fn restart_clears_input_buffer() {
     app.set_ipc_sender(tx);
 
     // Buffer some input in Attached state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
     app.send_input(b"hello");
 
     match app.pty_store.state() {
@@ -81,7 +81,7 @@ fn restart_clears_input_buffer() {
     assert!(app.pty_store.state().is_restarting());
 
     // Re-attach — buffer should be empty
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
     match app.pty_store.state() {
         PtyLifecycleState::Attached { buffer } => {
             assert!(buffer.is_empty(), "buffer should be cleared after restart");
@@ -100,8 +100,8 @@ fn ctrl_r_with_popup_open_does_not_restart() {
     app.set_ipc_sender(tx);
 
     // Get to Ready state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     // Open a popup (e.g., backend switch)
@@ -137,8 +137,8 @@ fn double_ctrl_r_stays_restarting() {
     app.set_ipc_sender(tx);
 
     // Get to Ready state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     // First restart request
@@ -198,7 +198,7 @@ fn ctrl_r_from_attached_not_ready() {
     app.set_ipc_sender(tx);
 
     // Attach but don't get output (stays Attached, not Ready)
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
     assert!(
         matches!(app.pty_store.state(), PtyLifecycleState::Attached { .. }),
         "should be Attached after Attach intent"
@@ -230,8 +230,8 @@ fn ipc_channel_full_reverts_to_pending() {
     app.set_ipc_sender(tx);
 
     // Get to Ready state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     // Fill the channel (don't consume anything)
@@ -267,8 +267,8 @@ fn restart_clears_selection() {
     );
 
     // Get to Ready state
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::Attach);
-    app.dispatch_pty(anyclaude::ui::pty::PtyIntent::GotOutput);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::Attach);
+    app.dispatch_pty(anycode::ui::pty::PtyIntent::GotOutput);
     assert!(app.is_pty_ready());
 
     // Request restart — NOTE: current implementation does NOT clear selection
@@ -291,8 +291,8 @@ fn restart_clears_selection() {
 /// 7. build_restart_params with empty extras — verify valid SpawnParams
 #[test]
 fn build_restart_params_with_empty_extras() {
-    use anyclaude::args::build_restart_params;
-    use anyclaude::config::ClaudeSettingsManager;
+    use anycode::args::build_restart_params;
+    use anycode::config::ClaudeSettingsManager;
 
     let args: Vec<String> = vec!["--resume".to_string(), "session123".to_string()];
     let empty_env: Vec<(String, String)> = vec![];
@@ -301,14 +301,15 @@ fn build_restart_params_with_empty_extras() {
     let params = build_restart_params(
         &args,
         "http://localhost:3000",
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None, // no shim
         empty_env,
         empty_args,
             None,
-false,
-);
+false);
 
     // Verify we got valid params even with empty extras
     assert!(

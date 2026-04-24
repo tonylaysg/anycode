@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::config::{build_auth_header, Backend};
+use anycode::config::{build_auth_header, Backend};
 
 fn make_backend(auth_type: &str, api_key: Option<&str>) -> Backend {
     Backend {
@@ -12,9 +12,9 @@ fn make_backend(auth_type: &str, api_key: Option<&str>) -> Backend {
         pricing: None,
         thinking_compat: None,
         thinking_budget_tokens: None,
-        model_opus: None,
-        model_sonnet: None,
-        model_haiku: None,
+        model_opus: None, model_opus_max_effort: None,
+        model_sonnet: None, model_sonnet_max_effort: None,
+        model_haiku: None, model_haiku_max_effort: None,
     }
 }
 

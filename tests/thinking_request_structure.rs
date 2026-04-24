@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::proxy::thinking::ThinkingRegistry;
+use anycode::proxy::thinking::ThinkingRegistry;
 use serde_json::json;
 
 /// Test: Empty content after filtering thinking blocks

@@ -9,9 +9,9 @@
 
 mod common;
 
-use anyclaude::args::{build_restart_params, build_spawn_params, EnvSet};
-use anyclaude::config::ClaudeSettingsManager;
-use anyclaude::shim::TeammateShim;
+use anycode::args::{build_restart_params, build_spawn_params, EnvSet};
+use anycode::config::ClaudeSettingsManager;
+use anycode::shim::TeammateShim;
 
 // =============================================================================
 // PORT CONSISTENCY TESTS
@@ -27,13 +27,14 @@ fn spawn_env_contains_provided_proxy_url() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None, // no shim
     
         None,
-    false,
-    );
+    false);
 
     let anthropic_url = params
         .env
@@ -57,6 +58,8 @@ fn restart_env_contains_provided_proxy_url() {
     let params = build_restart_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
@@ -64,8 +67,7 @@ fn restart_env_contains_provided_proxy_url() {
         vec![], // no extra args
     
         None,
-    false,
-    );
+    false);
 
     let anthropic_url = params
         .env
@@ -93,14 +95,15 @@ fn restart_merges_extra_env_preserves_proxy_url() {
     let params = build_restart_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
         extra_env,
         vec![],
             None,
-false,
-);
+false);
 
     // Verify ANTHROPIC_BASE_URL is present and correct
     let anthropic_url = params
@@ -170,12 +173,13 @@ fn shim_script_port_matches_spawn_env_port() {
     let params = build_spawn_params(
         &args,
         &proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         Some(&shim),
             None,
-false,
-);
+false);
 
     // Verify env contains the proxy URL
     let anthropic_url = params
@@ -241,6 +245,8 @@ fn fallback_port_reflected_in_spawn_env() {
     let params = build_spawn_params(
         &args,
         actual_proxy_url, // Use actual, not config
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
@@ -277,14 +283,15 @@ fn restart_maintains_port_consistency_after_fallback() {
     let params = build_restart_params(
         &args,
         actual_proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
         vec![],
         vec![],
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env
@@ -313,24 +320,26 @@ fn initial_and_resume_modes_both_have_proxy_url() {
     let initial_params = build_spawn_params(
         &initial_args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Resume mode (with --resume flag)
     let resume_args: Vec<String> = vec!["--resume".into(), "session123".into()];
     let resume_params = build_spawn_params(
         &resume_args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Both should have the proxy URL
     let initial_url = initial_params
@@ -359,7 +368,7 @@ fn env_set_with_proxy_url_directly() {
     std::env::remove_var("ANTHROPIC_API_KEY");
 
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_auth_bypass(false)
         .build();
 
@@ -377,7 +386,7 @@ fn env_set_no_api_key_when_auth_token_present() {
     std::env::remove_var("ANTHROPIC_API_KEY");
 
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_auth_bypass(true)
         .build();
 
@@ -399,7 +408,7 @@ fn env_set_proxy_url_with_shim() {
     };
 
     let env = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_shim(Some(&shim))
         .build();
 
@@ -425,13 +434,13 @@ fn env_set_proxy_url_with_shim() {
 #[test]
 fn env_set_order_independent() {
     let env1 = EnvSet::new()
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .with_extra(vec![("VAR1".into(), "val1".into())])
         .build();
 
     let env2 = EnvSet::new()
         .with_extra(vec![("VAR1".into(), "val1".into())])
-        .with_proxy_url("http://127.0.0.1:4000")
+        .with_proxy_url_for_mode("http://127.0.0.1:4000", "ANTHROPIC_BASE_URL")
         .build();
 
     // Both should have the same variables
@@ -505,12 +514,13 @@ fn spawn_params_with_empty_args() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Should still have the proxy URL in env
     let anthropic_url = params
@@ -535,6 +545,8 @@ fn restart_params_with_empty_everything() {
     let params = build_restart_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
@@ -542,8 +554,7 @@ fn restart_params_with_empty_everything() {
         vec![], // empty extra args
     
         None,
-    false,
-    );
+    false);
 
     // Should still have the proxy URL in env
     let anthropic_url = params
@@ -568,12 +579,13 @@ fn spawn_env_preserves_localhost_url() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env
@@ -597,12 +609,13 @@ fn spawn_env_preserves_ipv6_url() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env
@@ -631,21 +644,23 @@ fn multiple_spawns_same_proxy_url() {
     let params1 = build_spawn_params(
         &args1,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
     let params2 = build_spawn_params(
         &args2,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let url1 = params1
         .env
@@ -672,26 +687,28 @@ fn spawn_then_restart_maintains_url() {
     let spawn_params = build_spawn_params(
         &spawn_args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     // Then restart
     let restart_args: Vec<String> = vec!["--resume".into(), spawn_params.session_id.clone()];
     let restart_params = build_restart_params(
         &restart_args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
         vec![],
         vec![],
             None,
-false,
-);
+false);
 
     let spawn_url = spawn_params
         .env
@@ -723,12 +740,13 @@ fn spawn_env_preserves_trailing_slash() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env
@@ -752,12 +770,13 @@ fn spawn_env_preserves_path() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env
@@ -781,12 +800,13 @@ fn spawn_env_preserves_https() {
     let params = build_spawn_params(
         &args,
         proxy_url,
+        "ANTHROPIC_BASE_URL",
+        "claude",
         "test-session-token",
         &ClaudeSettingsManager::new(),
         None,
             None,
-false,
-);
+false);
 
     let anthropic_url = params
         .env

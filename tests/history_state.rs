@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::ui::history::HistoryDialogState;
+use anycode::ui::history::HistoryDialogState;
 
 #[test]
 fn hidden_is_default() {

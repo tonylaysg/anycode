@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::metrics::StreamError;
+use anycode::metrics::StreamError;
 
 #[test]
 fn stream_error_display() {

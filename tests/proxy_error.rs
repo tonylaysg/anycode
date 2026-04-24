@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::proxy::error::{ErrorResponse, ProxyError};
+use anycode::proxy::error::{ErrorResponse, ProxyError};
 use axum::http::StatusCode;
 
 #[test]

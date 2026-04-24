@@ -2,8 +2,8 @@
 
 mod common;
 
-use anyclaude::proxy::thinking::{fast_hash, safe_suffix, safe_truncate, ThinkingRegistry};
-use anyclaude::sse::parse_sse_events;
+use anycode::proxy::thinking::{fast_hash, safe_suffix, safe_truncate, ThinkingRegistry};
+use anycode::sse::parse_sse_events;
 use serde_json::{json, Value};
 use std::time::Duration;
 

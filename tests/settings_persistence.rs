@@ -2,7 +2,7 @@ mod common;
 
 use std::collections::HashMap;
 
-use anyclaude::config::{save_claude_settings, Config};
+use anycode::config::{save_claude_settings, Config};
 use tempfile::TempDir;
 
 #[test]
@@ -30,7 +30,7 @@ auth_type = "passthrough"
 
     // Reload and verify
     let config = Config::load_from(&config_path).unwrap();
-    assert_eq!(config.claude_settings.get("agents"), Some(&true));
+    assert_eq!(config.claude.claude_settings.get("agents"), Some(&true));
 }
 
 #[test]
@@ -57,10 +57,10 @@ auth_type = "passthrough"
 
     // Verify other config sections are preserved
     let config = Config::load_from(&config_path).unwrap();
-    assert_eq!(config.defaults.active, "claude");
-    assert_eq!(config.defaults.timeout_seconds, 30);
-    assert_eq!(config.backends.len(), 1);
-    assert_eq!(config.backends[0].name, "claude");
+    assert_eq!(config.claude.defaults.active, "claude");
+    assert_eq!(config.claude.defaults.timeout_seconds, 30);
+    assert_eq!(config.claude.backends.len(), 1);
+    assert_eq!(config.claude.backends[0].name, "claude");
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn save_creates_config_if_not_exists() {
 
     // Read back raw TOML to verify structure
     let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(content.contains("[claude_settings]"));
+    assert!(content.contains("[claude.claude_settings]"));
     assert!(content.contains("agents = true"));
 }
 
@@ -106,5 +106,5 @@ auth_type = "passthrough"
     save_claude_settings(&config_path, &settings).unwrap();
 
     let config = Config::load_from(&config_path).unwrap();
-    assert_eq!(config.claude_settings.get("agents"), Some(&true));
+    assert_eq!(config.claude.claude_settings.get("agents"), Some(&true));
 }

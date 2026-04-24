@@ -1,6 +1,6 @@
 mod common;
 
-use anyclaude::error::{ErrorCategory, ErrorRegistry, ErrorSeverity, Feature};
+use anycode::error::{ErrorCategory, ErrorRegistry, ErrorSeverity, Feature};
 
 #[test]
 fn test_record_error() {

@@ -2,11 +2,11 @@
 
 mod common;
 
-use anyclaude::config::{
+use anycode::config::{
     Backend, Config, ConfigStore, DebugLoggingConfig, Defaults, ProxyConfig, TerminalConfig,
 };
-use anyclaude::metrics::DebugLogger;
-use anyclaude::proxy::ProxyServer;
+use anycode::metrics::DebugLogger;
+use anycode::proxy::ProxyServer;
 use common::mock_backend::{MockBackend, MockResponse};
 use reqwest::Client;
 use std::collections::HashMap;
@@ -16,6 +16,14 @@ use std::time::Duration;
 
 fn test_config(backend: Backend, bind_addr: &str) -> Config {
     Config {
+        proxy: ProxyConfig {
+            bind_addr: bind_addr.to_string(),
+            base_url: format!("http://{}", bind_addr),
+        },
+        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: backend.name.clone(),
             timeout_seconds: 2,
@@ -26,17 +34,14 @@ fn test_config(backend: Backend, bind_addr: &str) -> Config {
             max_retries: 2,
             retry_backoff_base_ms: 50,
         },
-        proxy: ProxyConfig {
-            bind_addr: bind_addr.to_string(),
-            base_url: format!("http://{}", bind_addr),
-        },
-        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![backend],
         agents: None,
-    }
+    ..Default::default()
+},
+    ..Default::default()
+
+}
 }
 
 fn create_backend(name: &str, base_url: &str) -> Backend {
@@ -52,7 +57,10 @@ fn create_backend(name: &str, base_url: &str) -> Backend {
         model_opus: None,
         model_sonnet: None,
         model_haiku: None,
-    }
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        }
 }
 
 #[tokio::test]
@@ -64,7 +72,7 @@ async fn test_successful_request_no_retry() {
     let config = test_config(create_backend("test", &mock.base_url()), &bind_addr);
     let config_store = ConfigStore::new(config.clone(), PathBuf::from("/tmp/test.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
 
     // Bind to port before spawning - this prevents race conditions
     let (proxy_addr, _base_url) = server.try_bind(&config_store).await.unwrap();
@@ -96,7 +104,7 @@ async fn test_error_response_not_retried() {
     let config = test_config(create_backend("test", &mock.base_url()), &bind_addr);
     let config_store = ConfigStore::new(config.clone(), PathBuf::from("/tmp/test.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
 
     // Bind to port before spawning - this prevents race conditions
     let (proxy_addr, _base_url) = server.try_bind(&config_store).await.unwrap();
@@ -130,7 +138,7 @@ async fn test_slow_response_succeeds() {
     let config = test_config(create_backend("test", &mock.base_url()), &bind_addr);
     let config_store = ConfigStore::new(config.clone(), PathBuf::from("/tmp/test.toml"));
     let debug_logger = Arc::new(DebugLogger::new(Default::default()));
-    let mut server = ProxyServer::new(config_store.clone(), debug_logger, None).unwrap();
+    let mut server = ProxyServer::new(config_store.clone(), anycode::cli_mode::CliMode::Claude, debug_logger, None).unwrap();
 
     // Bind to port before spawning - this prevents race conditions
     let (proxy_addr, _base_url) = server.try_bind(&config_store).await.unwrap();

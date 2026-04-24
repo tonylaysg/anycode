@@ -2,20 +2,25 @@
 
 mod common;
 
-use anyclaude::backend::BackendState;
-use anyclaude::config::{
+use anycode::backend::BackendState;
+use anycode::config::{
     Backend, Config, DebugLoggingConfig, Defaults, ProxyConfig, TerminalConfig,
 };
 use std::collections::HashMap;
-use anyclaude::ipc::{IpcError, IpcLayer};
-use anyclaude::metrics::{DebugLogger, ObservabilityHub};
-use anyclaude::proxy::shutdown::ShutdownManager;
-use anyclaude::proxy::thinking::TransformerRegistry;
+use anycode::ipc::{IpcError, IpcLayer};
+use anycode::metrics::{DebugLogger, ObservabilityHub};
+use anycode::proxy::shutdown::ShutdownManager;
+use anycode::proxy::thinking::TransformerRegistry;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn test_config() -> Config {
     Config {
+        proxy: ProxyConfig::default(),
+        webui: anycode::config::WebuiConfig::default(),
+        terminal: TerminalConfig::default(),
+        debug_logging: DebugLoggingConfig::default(),
+    claude: anycode::config::CliProfile {
         defaults: Defaults {
             active: "alpha".to_string(),
             timeout_seconds: 30,
@@ -26,10 +31,6 @@ fn test_config() -> Config {
             max_retries: 3,
             retry_backoff_base_ms: 100,
         },
-        proxy: ProxyConfig::default(),
-        webui: anyclaude::config::WebuiConfig::default(),
-        terminal: TerminalConfig::default(),
-        debug_logging: DebugLoggingConfig::default(),
         claude_settings: HashMap::new(),
         backends: vec![
             Backend {
@@ -44,7 +45,10 @@ fn test_config() -> Config {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
             Backend {
                 name: "beta".to_string(),
                 display_name: "Beta".to_string(),
@@ -57,16 +61,23 @@ fn test_config() -> Config {
                 model_opus: None,
                 model_sonnet: None,
                 model_haiku: None,
-            },
+            model_opus_max_effort: None,
+            model_sonnet_max_effort: None,
+            model_haiku_max_effort: None,
+        },
         ],
         agents: None,
-    }
+    ..Default::default()
+},
+    ..Default::default()
+
+}
 }
 
 #[tokio::test]
 async fn ipc_switch_backend_and_status() {
     let config = test_config();
-    let backend_state = BackendState::from_config(config.clone()).expect("backend state");
+    let backend_state = BackendState::from_config(config.claude.clone()).expect("backend state");
     let debug_logger = Arc::new(DebugLogger::new(DebugLoggingConfig::default()));
     let observability = ObservabilityHub::new(10).with_plugins(vec![debug_logger.clone()]);
     let shutdown = Arc::new(ShutdownManager::new());

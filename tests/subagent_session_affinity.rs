@@ -9,7 +9,7 @@ use serde_json::json;
 
 mod extract_ac_marker {
     use super::*;
-    use anyclaude::proxy::pipeline::extract_ac_marker;
+    use anycode::proxy::pipeline::extract_ac_marker;
 
     /// Helper: wrap marker text in the CC hook context format.
     fn hook_msg(marker: &str) -> serde_json::Value {
@@ -195,7 +195,7 @@ mod extract_ac_marker {
 // ============================================================================
 
 mod assembler_hooks {
-    use anyclaude::args::ArgAssembler;
+    use anycode::args::ArgAssembler;
 
     #[test]
     fn adds_settings_flag() {
@@ -269,7 +269,7 @@ mod assembler_hooks {
 // ============================================================================
 
 mod hook_response {
-    use anyclaude::proxy::hooks::{HookSpecificOutput, SubagentStartResponse};
+    use anycode::proxy::hooks::{HookSpecificOutput, SubagentStartResponse};
 
     #[test]
     fn response_with_backend() {
@@ -330,7 +330,7 @@ mod hook_response {
 // ============================================================================
 
 mod hook_input {
-    use anyclaude::proxy::hooks::SubagentHookInput;
+    use anycode::proxy::hooks::SubagentHookInput;
 
     #[test]
     fn deserializes_with_agent_id() {
@@ -374,7 +374,7 @@ mod hook_input {
 // ============================================================================
 
 mod registry {
-    use anyclaude::backend::AgentRegistry;
+    use anycode::backend::AgentRegistry;
 
     #[test]
     fn register_and_lookup() {
