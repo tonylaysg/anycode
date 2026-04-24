@@ -2,6 +2,12 @@
 
 All notable changes to anycode are documented in this file.
 
+## [0.6.5] - 2026-04-24
+
+### Fixes
+
+- **proxy**: accept `x-api-key: <token>` for session-token authentication. Copilot CLI under BYOK with `COPILOT_PROVIDER_TYPE=anthropic` uses the official Anthropic SDK, which sends the provider key via `x-api-key` (the Anthropic convention) — not `Authorization: Bearer`. Previously the proxy's auth middleware only recognized `x-session-token` and `Authorization: Bearer`, so every anycopilot request to a BYOK Anthropic endpoint was rejected with `401 Unauthorized: invalid session token` at the front door, before any transform or upstream call could run. anycopilot is now fully functional end-to-end for all three wire APIs (anthropic / openai / openai-responses).
+
 ## [0.6.4] - 2026-04-24
 
 ### Fixes

@@ -314,6 +314,42 @@ async fn middleware_rejects_wrong_bearer_token() {
     assert_eq!(resp.status().as_u16(), 401);
 }
 
+/// Copilot BYOK with Anthropic wire: the upstream Anthropic SDK used by
+/// Copilot CLI (COPILOT_PROVIDER_TYPE=anthropic) sends the provider key
+/// via `x-api-key` — not `Authorization: Bearer`. The middleware must
+/// accept that form equivalently or Copilot BYOK requests 401 at the
+/// proxy front door.
+#[tokio::test]
+async fn middleware_accepts_x_api_key_header() {
+    let addr = start_server_with_token(Some("secret-token".into())).await;
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/v1/messages", addr))
+        .header("x-api-key", "secret-token")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    let body = resp.text().await.unwrap();
+    assert!(
+        !body.contains("invalid session token"),
+        "x-api-key should pass auth middleware, got: {}",
+        body,
+    );
+}
+
+#[tokio::test]
+async fn middleware_rejects_wrong_x_api_key() {
+    let addr = start_server_with_token(Some("secret-token".into())).await;
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/v1/messages", addr))
+        .header("x-api-key", "wrong-token")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 401);
+}
+
 /// /health without token → 200 (health is not auth-protected)
 #[tokio::test]
 async fn health_endpoint_bypasses_auth() {

@@ -86,21 +86,22 @@ impl RouterEngine {
 /// Auth middleware — validates session token for proxy requests.
 ///
 /// Rejects requests without a valid session token when one is configured.
-/// Accepts either `x-session-token: <token>` (Claude Code via
-/// `ANTHROPIC_CUSTOM_HEADERS`) or `Authorization: Bearer <token>` (Copilot
-/// BYOK — see `src/args/env_builder.rs::with_copilot_env`).
+/// Accepts any of:
+///
+/// * `x-session-token: <token>` — Claude Code path, via
+///   `ANTHROPIC_CUSTOM_HEADERS`.
+/// * `Authorization: Bearer <token>` — Copilot BYOK path with OpenAI /
+///   Azure wire APIs (OpenAI SDK default).
+/// * `x-api-key: <token>` — Copilot BYOK path with Anthropic wire API;
+///   the official Anthropic SDK sends the provider key via this header
+///   (not `Authorization`), so for `COPILOT_PROVIDER_TYPE=anthropic` the
+///   incoming request carries `x-api-key: <COPILOT_PROVIDER_API_KEY>`.
 async fn auth_middleware(
     State(state): State<RouterEngine>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
     if let Some(ref expected_token) = state.session_token {
-        // Accept either:
-        //   x-session-token: <token>            (Claude Code path, via ANTHROPIC_CUSTOM_HEADERS)
-        //   Authorization: Bearer <token>       (Copilot BYOK path; CLI has no
-        //                                        way to inject custom headers,
-        //                                        so it sends the provider API
-        //                                        key as a bearer token)
         let headers = req.headers();
         let session_header = headers
             .get("x-session-token")
@@ -109,9 +110,13 @@ async fn auth_middleware(
             .get("authorization")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer ")));
+        let api_key_header = headers
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok());
 
         let valid = session_header.is_some_and(|t| t == expected_token)
-            || bearer_header.is_some_and(|t| t == expected_token);
+            || bearer_header.is_some_and(|t| t == expected_token)
+            || api_key_header.is_some_and(|t| t == expected_token);
 
         if !valid {
             return Response::builder()
