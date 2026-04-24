@@ -9,6 +9,51 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::thread;
 
+/// Strip ANSI CSI/OSC escapes so the PTY tail dumped to startup.log is
+/// human-readable. Not comprehensive — covers the common sequences a
+/// Copilot error message would emit (SGR, cursor, clear).
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == 0x1b && i + 1 < bytes.len() {
+            let next = bytes[i + 1];
+            if next == b'[' {
+                // CSI: ESC [ ... final-byte-in-0x40-0x7e
+                i += 2;
+                while i < bytes.len() && !(0x40..=0x7e).contains(&bytes[i]) {
+                    i += 1;
+                }
+                i += 1;
+                continue;
+            } else if next == b']' {
+                // OSC: ESC ] ... BEL or ESC \
+                i += 2;
+                while i < bytes.len() {
+                    if bytes[i] == 0x07 {
+                        i += 1;
+                        break;
+                    }
+                    if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+                continue;
+            } else {
+                i += 2;
+                continue;
+            }
+        }
+        out.push(c as char);
+        i += 1;
+    }
+    out
+}
+
 pub struct PtySession {
     handle: PtyHandle,
     child: Box<dyn Child + Send + Sync>,
@@ -57,6 +102,12 @@ impl PtySession {
         let handle = PtyHandle::new(Arc::clone(&emu), writer, master);
 
         let reader_emu = Arc::clone(&emu);
+        // Capture a ring buffer of PTY output. On child exit we flush the
+        // tail to startup.log so diagnosing "child died before writing its
+        // own log file" regressions doesn't require re-running with a
+        // separate tracer. Kept to 4 KiB so it's cheap.
+        let pty_tail = Arc::new(Mutex::new(Vec::<u8>::with_capacity(4096)));
+        let pty_tail_r = Arc::clone(&pty_tail);
         let reader_handle = thread::spawn(move || {
             let mut reader = reader;
             let mut buffer = [0u8; 8192];
@@ -77,10 +128,37 @@ impl PtySession {
                 };
 
                 reader_emu.lock().process(&buffer[..count]);
+                // Append to tail ring buffer (4 KiB)
+                {
+                    let mut tail = pty_tail_r.lock();
+                    let chunk = &buffer[..count];
+                    if chunk.len() >= 4096 {
+                        tail.clear();
+                        tail.extend_from_slice(&chunk[chunk.len() - 4096..]);
+                    } else {
+                        tail.extend_from_slice(chunk);
+                        if tail.len() > 4096 {
+                            let drop = tail.len() - 4096;
+                            tail.drain(..drop);
+                        }
+                    }
+                }
                 let _ = notifier.send(AppEvent::PtyOutput);
             }
             // Notify UI that the child process has exited (only if no error already sent)
             if !had_error {
+                // Flush PTY tail to the startup trace log so "child died
+                // before writing its own log" cases are debuggable.
+                let tail_bytes = pty_tail_r.lock().clone();
+                let tail_str = String::from_utf8_lossy(&tail_bytes);
+                // Strip ANSI escape sequences crudely to keep the log readable.
+                let cleaned = strip_ansi(&tail_str);
+                crate::ui::runtime_trace(&format!(
+                    "PTY child exited (generation={}); last {} bytes of output (ansi-stripped):\n---BEGIN-PTY-TAIL---\n{}\n---END-PTY-TAIL---",
+                    generation,
+                    tail_bytes.len(),
+                    cleaned.trim_end()
+                ));
                 let _ = notifier.send(AppEvent::ProcessExit { pty_generation: generation });
             }
         });
