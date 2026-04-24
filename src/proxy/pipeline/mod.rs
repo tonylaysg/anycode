@@ -13,6 +13,7 @@ use crate::proxy::thinking::TransformerRegistry;
 
 mod extract;
 mod forward;
+mod upstream_url;
 mod headers;
 mod response;
 mod routing;
@@ -26,6 +27,7 @@ pub use response::handle_response;
 pub use routing::{extract_ac_marker, resolve_backend};
 pub use thinking::create_thinking;
 pub use transform::transform_body;
+pub use upstream_url::build_upstream_url;
 
 /// Context shared across pipeline stages.
 ///
@@ -391,7 +393,7 @@ async fn retry_with_body(
     orig_body: String,
 ) -> reqwest::Response {
     let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    let upstream_uri = format!("{}{}", backend.base_url, path_and_query);
+    let upstream_uri = build_upstream_url(&backend.base_url, path_and_query);
     let mut builder = client.request(method, &upstream_uri);
     for (name, value) in &headers {
         builder = builder.header(name, value);
